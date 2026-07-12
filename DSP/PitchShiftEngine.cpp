@@ -10,7 +10,7 @@ void PitchShiftEngine::prepare(const juce::dsp::ProcessSpec& newSpec)
     for (int channel = 0; channel < SoundShifterDSP::Config::maxChannels; ++channel)
     {
         inputRings[static_cast<size_t>(channel)].prepare(SoundShifterDSP::Config::fftSize);
-        fftProcessors[static_cast<size_t>(channel)].prepare();
+        fftProcessors[static_cast<size_t>(channel)].prepare(spec.sampleRate);
         inputFrames[static_cast<size_t>(channel)].assign(
             static_cast<size_t>(SoundShifterDSP::Config::fftSize), 0.0f);
         outputFrames[static_cast<size_t>(channel)].assign(
@@ -29,11 +29,9 @@ void PitchShiftEngine::reset() noexcept
         inputRings[static_cast<size_t>(channel)].reset();
         fftProcessors[static_cast<size_t>(channel)].reset();
         std::fill(inputFrames[static_cast<size_t>(channel)].begin(),
-                  inputFrames[static_cast<size_t>(channel)].end(),
-                  0.0f);
+                  inputFrames[static_cast<size_t>(channel)].end(), 0.0f);
         std::fill(outputFrames[static_cast<size_t>(channel)].begin(),
-                  outputFrames[static_cast<size_t>(channel)].end(),
-                  0.0f);
+                  outputFrames[static_cast<size_t>(channel)].end(), 0.0f);
     }
 
     overlapAdd.reset();
@@ -68,9 +66,7 @@ void PitchShiftEngine::process(juce::AudioBuffer<float>& buffer) noexcept
         for (int channel = 0; channel < channelsToProcess; ++channel)
             inputRings[static_cast<size_t>(channel)].push(buffer.getSample(channel, sample));
 
-        --samplesUntilFrame;
-
-        if (samplesUntilFrame <= 0)
+        if (--samplesUntilFrame <= 0)
         {
             processAvailableFrames();
             samplesUntilFrame = SoundShifterDSP::Config::hopSize;
@@ -81,8 +77,6 @@ void PitchShiftEngine::process(juce::AudioBuffer<float>& buffer) noexcept
 
         overlapAdd.advance();
     }
-
-    juce::ignoreUnused(pitchSemitones, fineCents, highQuality);
 }
 
 int PitchShiftEngine::getLatencySamples() const noexcept
@@ -92,6 +86,9 @@ int PitchShiftEngine::getLatencySamples() const noexcept
 
 void PitchShiftEngine::processAvailableFrames() noexcept
 {
+    const auto totalSemitones = pitchSemitones + fineCents * 0.01f;
+    const auto pitchRatio = std::pow(2.0f, totalSemitones / 12.0f);
+
     for (int channel = 0; channel < activeChannels; ++channel)
     {
         auto& ring = inputRings[static_cast<size_t>(channel)];
@@ -102,7 +99,10 @@ void PitchShiftEngine::processAvailableFrames() noexcept
         auto& output = outputFrames[static_cast<size_t>(channel)];
 
         ring.copyOldestToNewest(input.data(), SoundShifterDSP::Config::fftSize);
-        fftProcessors[static_cast<size_t>(channel)].processIdentityFrame(input.data(), output.data());
+        fftProcessors[static_cast<size_t>(channel)].processPitchFrame(
+            input.data(), output.data(), pitchRatio);
         overlapAdd.addFrame(channel, output.data());
     }
+
+    juce::ignoreUnused(highQuality);
 }

@@ -18,7 +18,7 @@ public:
     bool hasEditor() const override { return true; }
 
     const juce::String getName() const override { return JucePlugin_Name; }
-    bool acceptsMidi() const override { return false; }
+    bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
@@ -44,10 +44,19 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
+    void handleMidiControl(const juce::MidiBuffer& midiMessages);
+    void changePitchBySemitones(float amount);
+    void setPitchFromMidi(float semitones);
+    void prepareDryDelay(int channels, int maximumBlockSize);
+    void createDelayedDry(const juce::AudioBuffer<float>& input, int numSamples);
     juce::AudioProcessorValueTreeState apvts;
     PitchShiftEngine pitchShiftEngine;
 
     juce::LinearSmoothedValue<float> outputGainLinear;
+    juce::AudioBuffer<float> dryDelayBuffer;
+    juce::AudioBuffer<float> delayedDryBlock;
+    int dryDelayWritePosition = 0;
+    std::array<bool, 128> ccPressed {};
     std::atomic<float> inputLeftDb { -100.0f };
     std::atomic<float> inputRightDb { -100.0f };
     std::atomic<float> outputLeftDb { -100.0f };

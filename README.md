@@ -1,35 +1,28 @@
-# SoundShifter Pro
+# SoundShifter Pro — Milestone 2D
 
-Milestone 2C activates the complete identity STFT signal path.
+## Completed
 
-## Included
+- Real-time polyphonic pitch shifting V1
+- Pitch range: -12 to +12 semitones
+- Fine tuning: -100 to +100 cents
+- Tempo remains unchanged
+- Stereo FFT phase-vocoder processing
+- Latency-compensated dry/wet mix
+- Latency-compensated bypass
+- MIDI input enabled
+- GUI and host automation remain synchronized
+- No allocation inside processBlock
 
-- JUCE 8 VST3 and Standalone targets
-- Commercial resizable GUI
-- APVTS parameters and state recall
-- Stereo input/output meters
-- Allocation-free audio callback path
-- 2048-point real FFT and IFFT
-- 512-sample hop size
-- Hann analysis window
-- Normalised synthesis window
-- Stereo overlap-add reconstruction
-- Fixed reported plugin latency
+## Default MIDI mapping
 
-## Current DSP status
+- CC 30, value >= 64: Tone Down
+- CC 31, value >= 64: Tone Up
+- CC 32, value >= 64: Tone Reset
+- Note C4 / MIDI 60: Tone Down
+- Note D4 / MIDI 62: Tone Up
+- Note E4 / MIDI 64: Tone Reset
 
-Audio now passes through the complete FFT -> spectrum -> IFFT -> overlap-add path. The spectrum remains unchanged, so the expected result is transparent delayed audio. Pitch and Fine are connected but spectral shifting starts in Milestone 2D.
-
-## Test checklist
-
-- Pitch = 0 semitone
-- Fine = 0 cent
-- Mix = 100%
-- Output = 0 dB
-- HQ = ON
-- No clicks or pops
-- Stereo image remains centred
-- Output level closely matches input
+For CC buttons, send value 127 when pressed and value 0 when released.
 
 ## Build
 
@@ -38,3 +31,13 @@ cd D:\ProjectsVST3\SoundShifterPro
 cmake -S . -B Build -A x64
 cmake --build Build --config Release
 ```
+
+## Initial test
+
+- Pitch: +3, -5, +12, -12
+- Fine: +50, -25
+- Mix: 100%
+- Output: 0 dB
+- Test stereo beats and transient-heavy material
+
+Milestone 2E will improve phase locking, transient preservation, stereo coherence, and sound quality.
