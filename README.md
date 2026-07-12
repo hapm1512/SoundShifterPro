@@ -41,3 +41,12 @@ cmake --build Build --config Release
 - Test stereo beats and transient-heavy material
 
 Milestone 2E will improve phase locking, transient preservation, stereo coherence, and sound quality.
+
+
+## Epic 3A - Peak Detection
+
+- Adaptive spectral peak detection.
+- Local-maxima identification.
+- Preallocated peak storage.
+- No audio-thread allocations.
+- Peak data exposed for Phase Locking.

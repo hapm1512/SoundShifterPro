@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include "DSPConfig.h"
 #include "WindowProcessor.h"
+#include "PeakDetector.h"
 
 class FFTProcessor
 {
@@ -20,6 +21,7 @@ public:
         analysisFrequency.assign(static_cast<size_t>(numBins), 0.0f);
         synthesisMagnitude.assign(static_cast<size_t>(numBins), 0.0f);
         synthesisFrequency.assign(static_cast<size_t>(numBins), 0.0f);
+        peakDetector.prepare(numBins);
         reset();
     }
 
@@ -32,6 +34,7 @@ public:
         std::fill(analysisFrequency.begin(), analysisFrequency.end(), 0.0f);
         std::fill(synthesisMagnitude.begin(), synthesisMagnitude.end(), 0.0f);
         std::fill(synthesisFrequency.begin(), synthesisFrequency.end(), 0.0f);
+        peakDetector.reset();
     }
 
     void processPitchFrame(const float* input, float* output, float pitchRatio) noexcept
@@ -72,6 +75,8 @@ public:
                 (static_cast<float>(bin) + binDeviation) * frequencyPerBin;
         }
 
+        peakDetector.detect(analysisMagnitude.data(), numBins);
+
         for (int sourceBin = 0; sourceBin < numBins; ++sourceBin)
         {
             const auto targetPosition = static_cast<float>(sourceBin) * safeRatio;
@@ -108,6 +113,16 @@ public:
         fft->performRealOnlyInverseTransform(transformData.data());
         window.applySynthesis(transformData.data(), fftSize);
         juce::FloatVectorOperations::copy(output, transformData.data(), fftSize);
+    }
+
+    [[nodiscard]] int getPeakCount() const noexcept
+    {
+        return peakDetector.getPeakCount();
+    }
+
+    [[nodiscard]] const int* getPeakIndices() const noexcept
+    {
+        return peakDetector.getPeakIndices();
     }
 
 private:
@@ -162,5 +177,6 @@ private:
     std::vector<float> analysisFrequency;
     std::vector<float> synthesisMagnitude;
     std::vector<float> synthesisFrequency;
+    PeakDetector peakDetector;
     double sampleRate = 44100.0;
 };
