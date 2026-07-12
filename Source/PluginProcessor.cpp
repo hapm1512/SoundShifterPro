@@ -8,6 +8,7 @@ namespace ParameterIDs
     constexpr auto mix = "mix";
     constexpr auto output = "output";
     constexpr auto bypass = "bypass";
+    constexpr auto hq = "hq";
 }
 
 SoundShifterProAudioProcessor::SoundShifterProAudioProcessor()
@@ -56,6 +57,11 @@ SoundShifterProAudioProcessor::createParameterLayout()
         "Bypass",
         false));
 
+    parameters.push_back(std::make_unique<juce::AudioParameterBool>(
+        juce::ParameterID { ParameterIDs::hq, 1 },
+        "High Quality",
+        true));
+
     return { parameters.begin(), parameters.end() };
 }
 
@@ -67,6 +73,7 @@ void SoundShifterProAudioProcessor::prepareToPlay(double sampleRate, int samples
         static_cast<juce::uint32>(juce::jmax(1, getTotalNumOutputChannels()))
     };
 
+    currentSampleRate.store(sampleRate);
     pitchShiftEngine.prepare(spec);
     outputGainLinear.reset(sampleRate, 0.02);
     outputGainLinear.setCurrentAndTargetValue(1.0f);
@@ -98,8 +105,14 @@ void SoundShifterProAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     for (auto channel = getTotalNumInputChannels(); channel < getTotalNumOutputChannels(); ++channel)
         buffer.clear(channel, 0, buffer.getNumSamples());
 
-    const auto inputMagnitude = buffer.getMagnitude(0, buffer.getNumSamples());
-    inputLevelDb.store(juce::Decibels::gainToDecibels(inputMagnitude, -100.0f));
+    const auto inputLeftMagnitude = buffer.getNumChannels() > 0
+                                      ? buffer.getMagnitude(0, 0, buffer.getNumSamples())
+                                      : 0.0f;
+    const auto inputRightMagnitude = buffer.getNumChannels() > 1
+                                       ? buffer.getMagnitude(1, 0, buffer.getNumSamples())
+                                       : inputLeftMagnitude;
+    inputLeftDb.store(juce::Decibels::gainToDecibels(inputLeftMagnitude, -100.0f));
+    inputRightDb.store(juce::Decibels::gainToDecibels(inputRightMagnitude, -100.0f));
 
     const auto bypassed = apvts.getRawParameterValue(ParameterIDs::bypass)->load() > 0.5f;
 
@@ -110,6 +123,7 @@ void SoundShifterProAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
 
         pitchShiftEngine.setPitchSemitones(pitch);
         pitchShiftEngine.setFineCents(fine);
+        juce::ignoreUnused(apvts.getRawParameterValue(ParameterIDs::hq)->load());
         pitchShiftEngine.process(buffer);
 
         // Mix remains transparent until Milestone 2 provides wet audio.
@@ -126,8 +140,14 @@ void SoundShifterProAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
             buffer.setSample(channel, sample, buffer.getSample(channel, sample) * gain);
     }
 
-    const auto outputMagnitude = buffer.getMagnitude(0, buffer.getNumSamples());
-    outputLevelDb.store(juce::Decibels::gainToDecibels(outputMagnitude, -100.0f));
+    const auto outputLeftMagnitude = buffer.getNumChannels() > 0
+                                       ? buffer.getMagnitude(0, 0, buffer.getNumSamples())
+                                       : 0.0f;
+    const auto outputRightMagnitude = buffer.getNumChannels() > 1
+                                        ? buffer.getMagnitude(1, 0, buffer.getNumSamples())
+                                        : outputLeftMagnitude;
+    outputLeftDb.store(juce::Decibels::gainToDecibels(outputLeftMagnitude, -100.0f));
+    outputRightDb.store(juce::Decibels::gainToDecibels(outputRightMagnitude, -100.0f));
 }
 
 void SoundShifterProAudioProcessor::getStateInformation(juce::MemoryBlock& destData)

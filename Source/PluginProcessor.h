@@ -35,8 +35,11 @@ public:
     juce::AudioProcessorValueTreeState& getAPVTS() noexcept { return apvts; }
     const juce::AudioProcessorValueTreeState& getAPVTS() const noexcept { return apvts; }
 
-    float getInputLevelDb() const noexcept { return inputLevelDb.load(); }
-    float getOutputLevelDb() const noexcept { return outputLevelDb.load(); }
+    float getInputLeftDb() const noexcept { return inputLeftDb.load(); }
+    float getInputRightDb() const noexcept { return inputRightDb.load(); }
+    float getOutputLeftDb() const noexcept { return outputLeftDb.load(); }
+    float getOutputRightDb() const noexcept { return outputRightDb.load(); }
+    double getCurrentSampleRateHz() const noexcept { return currentSampleRate.load(); }
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -45,8 +48,11 @@ private:
     PitchShiftEngine pitchShiftEngine;
 
     juce::LinearSmoothedValue<float> outputGainLinear;
-    std::atomic<float> inputLevelDb { -100.0f };
-    std::atomic<float> outputLevelDb { -100.0f };
+    std::atomic<float> inputLeftDb { -100.0f };
+    std::atomic<float> inputRightDb { -100.0f };
+    std::atomic<float> outputLeftDb { -100.0f };
+    std::atomic<float> outputRightDb { -100.0f };
+    std::atomic<double> currentSampleRate { 44100.0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SoundShifterProAudioProcessor)
 };

@@ -1,28 +1,22 @@
 # SoundShifter Pro
 
-Stereo pitch-shifting VST3 and standalone application for musical beats.
+Milestone 2A commercial GUI foundation.
 
-## Milestone 1
+## Included
 
-- JUCE 8 + CMake project
-- VST3 and Standalone targets
-- APVTS parameter system
-- Pitch, Fine, Mix, Output and Bypass controls
-- Input and output meters
-- State save and restore
-- Transparent DSP pass-through
+- JUCE 8 VST3 and Standalone targets
+- Resizable commercial interface
+- Primary Pitch Shift control
+- Fine, Mix, and Output controls
+- HQ and Bypass parameters
+- Stereo input and output meters
+- Latency and engine status display
+- APVTS state persistence
+- DSP remains transparent until Milestone 2B
 
-## Local paths
-
-- Project: `D:\ProjectsVST3\SoundShifterPro`
-- JUCE: `D:\JUCE8`
-
-## Configure and build
+## Build
 
 ```powershell
-cd D:\ProjectsVST3\SoundShifterPro
-cmake -S . -B Build -G "Visual Studio 18 2026" -A x64
+cmake -S . -B Build -A x64
 cmake --build Build --config Release
 ```
-
-If your Visual Studio generator has another name, run `cmake --help` and use the installed generator name.
