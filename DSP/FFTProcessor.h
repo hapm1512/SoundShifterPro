@@ -11,44 +11,48 @@ public:
     {
         fft = std::make_unique<juce::dsp::FFT>(SoundShifterDSP::Config::fftOrder);
         window.prepare(SoundShifterDSP::Config::fftSize);
-        timeDomain.assign(static_cast<size_t>(SoundShifterDSP::Config::fftSize), 0.0f);
-        frequencyDomain.assign(static_cast<size_t>(SoundShifterDSP::Config::fftSize * 2), 0.0f);
+        transformData.assign(static_cast<size_t>(SoundShifterDSP::Config::fftSize * 2), 0.0f);
         reset();
     }
 
     void reset() noexcept
     {
-        std::fill(timeDomain.begin(), timeDomain.end(), 0.0f);
-        std::fill(frequencyDomain.begin(), frequencyDomain.end(), 0.0f);
+        std::fill(transformData.begin(), transformData.end(), 0.0f);
     }
 
-    void analyseFrame(const float* input) noexcept
+    void processIdentityFrame(const float* input, float* output) noexcept
     {
         jassert(fft != nullptr);
         jassert(input != nullptr);
+        jassert(output != nullptr);
 
-        juce::FloatVectorOperations::copy(timeDomain.data(),
+        juce::FloatVectorOperations::clear(transformData.data(),
+                                           SoundShifterDSP::Config::fftSize * 2);
+        juce::FloatVectorOperations::copy(transformData.data(),
                                           input,
                                           SoundShifterDSP::Config::fftSize);
-        window.apply(timeDomain.data(), SoundShifterDSP::Config::fftSize);
 
-        juce::FloatVectorOperations::clear(frequencyDomain.data(),
-                                           SoundShifterDSP::Config::fftSize * 2);
-        juce::FloatVectorOperations::copy(frequencyDomain.data(),
-                                          timeDomain.data(),
+        window.applyAnalysis(transformData.data(), SoundShifterDSP::Config::fftSize);
+        fft->performRealOnlyForwardTransform(transformData.data());
+
+        // Milestone 2C intentionally leaves the spectrum unchanged.
+        // Milestone 2D will modify magnitude and phase here.
+
+        fft->performRealOnlyInverseTransform(transformData.data());
+        window.applySynthesis(transformData.data(), SoundShifterDSP::Config::fftSize);
+
+        juce::FloatVectorOperations::copy(output,
+                                          transformData.data(),
                                           SoundShifterDSP::Config::fftSize);
-
-        fft->performRealOnlyForwardTransform(frequencyDomain.data(), true);
     }
 
-    [[nodiscard]] const float* getFrequencyData() const noexcept
+    [[nodiscard]] const float* getTransformData() const noexcept
     {
-        return frequencyDomain.data();
+        return transformData.data();
     }
 
 private:
     std::unique_ptr<juce::dsp::FFT> fft;
     WindowProcessor window;
-    std::vector<float> timeDomain;
-    std::vector<float> frequencyDomain;
+    std::vector<float> transformData;
 };

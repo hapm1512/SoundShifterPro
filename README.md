@@ -1,6 +1,6 @@
 # SoundShifter Pro
 
-Milestone 2B establishes the real-time DSP foundation while preserving transparent audio passthrough.
+Milestone 2C activates the complete identity STFT signal path.
 
 ## Included
 
@@ -9,15 +9,27 @@ Milestone 2B establishes the real-time DSP foundation while preserving transpare
 - APVTS parameters and state recall
 - Stereo input/output meters
 - Allocation-free audio callback path
-- Stereo ring-buffer capture
-- 2048-point Hann-window FFT analysis
+- 2048-point real FFT and IFFT
 - 512-sample hop size
-- Overlap-add infrastructure
-- Fixed preallocated DSP scratch buffers
+- Hann analysis window
+- Normalised synthesis window
+- Stereo overlap-add reconstruction
+- Fixed reported plugin latency
 
 ## Current DSP status
 
-Audio remains unchanged. FFT analysis runs internally and prepares the project for spectral pitch shifting in Milestone 2C/2D.
+Audio now passes through the complete FFT -> spectrum -> IFFT -> overlap-add path. The spectrum remains unchanged, so the expected result is transparent delayed audio. Pitch and Fine are connected but spectral shifting starts in Milestone 2D.
+
+## Test checklist
+
+- Pitch = 0 semitone
+- Fine = 0 cent
+- Mix = 100%
+- Output = 0 dB
+- HQ = ON
+- No clicks or pops
+- Stereo image remains centred
+- Output level closely matches input
 
 ## Build
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "AudioBlock.h"
 #include "DSPConfig.h"
 #include "FFTProcessor.h"
 #include "OverlapAdd.h"
@@ -19,25 +18,20 @@ public:
 
     void process(juce::AudioBuffer<float>& buffer) noexcept;
 
-    [[nodiscard]] int getAnalysisLatencySamples() const noexcept;
+    [[nodiscard]] int getLatencySamples() const noexcept;
     [[nodiscard]] bool isPrepared() const noexcept { return prepared; }
 
 private:
-    void captureAnalysisFrames(const juce::AudioBuffer<float>& buffer) noexcept;
-    void analyseAvailableFrame(int channel) noexcept;
+    void processAvailableFrames() noexcept;
 
     juce::dsp::ProcessSpec spec {};
     std::array<RingBuffer, SoundShifterDSP::Config::maxChannels> inputRings;
     std::array<FFTProcessor, SoundShifterDSP::Config::maxChannels> fftProcessors;
-    std::array<std::vector<float>, SoundShifterDSP::Config::maxChannels> frameScratch;
+    std::array<std::vector<float>, SoundShifterDSP::Config::maxChannels> inputFrames;
+    std::array<std::vector<float>, SoundShifterDSP::Config::maxChannels> outputFrames;
     OverlapAdd overlapAdd;
-    FixedAudioBlock dryScratch;
 
-    std::array<int, SoundShifterDSP::Config::maxChannels> samplesUntilAnalysis {
-        SoundShifterDSP::Config::fftSize,
-        SoundShifterDSP::Config::fftSize
-    };
-
+    int samplesUntilFrame = SoundShifterDSP::Config::fftSize;
     float pitchSemitones = 0.0f;
     float fineCents = 0.0f;
     bool highQuality = true;

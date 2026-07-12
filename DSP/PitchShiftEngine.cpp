@@ -11,12 +11,13 @@ void PitchShiftEngine::prepare(const juce::dsp::ProcessSpec& newSpec)
     {
         inputRings[static_cast<size_t>(channel)].prepare(SoundShifterDSP::Config::fftSize);
         fftProcessors[static_cast<size_t>(channel)].prepare();
-        frameScratch[static_cast<size_t>(channel)].assign(
+        inputFrames[static_cast<size_t>(channel)].assign(
+            static_cast<size_t>(SoundShifterDSP::Config::fftSize), 0.0f);
+        outputFrames[static_cast<size_t>(channel)].assign(
             static_cast<size_t>(SoundShifterDSP::Config::fftSize), 0.0f);
     }
 
     overlapAdd.prepare(activeChannels);
-    dryScratch.prepare(activeChannels, static_cast<int>(spec.maximumBlockSize));
     prepared = true;
     reset();
 }
@@ -27,14 +28,16 @@ void PitchShiftEngine::reset() noexcept
     {
         inputRings[static_cast<size_t>(channel)].reset();
         fftProcessors[static_cast<size_t>(channel)].reset();
-        std::fill(frameScratch[static_cast<size_t>(channel)].begin(),
-                  frameScratch[static_cast<size_t>(channel)].end(),
+        std::fill(inputFrames[static_cast<size_t>(channel)].begin(),
+                  inputFrames[static_cast<size_t>(channel)].end(),
                   0.0f);
-        samplesUntilAnalysis[static_cast<size_t>(channel)] = SoundShifterDSP::Config::fftSize;
+        std::fill(outputFrames[static_cast<size_t>(channel)].begin(),
+                  outputFrames[static_cast<size_t>(channel)].end(),
+                  0.0f);
     }
 
     overlapAdd.reset();
-    dryScratch.reset();
+    samplesUntilFrame = SoundShifterDSP::Config::fftSize;
 }
 
 void PitchShiftEngine::setPitchSemitones(float newSemitones) noexcept
@@ -57,50 +60,49 @@ void PitchShiftEngine::process(juce::AudioBuffer<float>& buffer) noexcept
     if (!prepared || buffer.getNumSamples() <= 0)
         return;
 
-    captureAnalysisFrames(buffer);
+    const auto channelsToProcess = juce::jmin(activeChannels, buffer.getNumChannels());
+    const auto numberOfSamples = buffer.getNumSamples();
 
-    // Milestone 2B deliberately leaves the audio untouched.
-    // FFT analysis infrastructure is active and allocation-free here.
+    for (int sample = 0; sample < numberOfSamples; ++sample)
+    {
+        for (int channel = 0; channel < channelsToProcess; ++channel)
+            inputRings[static_cast<size_t>(channel)].push(buffer.getSample(channel, sample));
+
+        --samplesUntilFrame;
+
+        if (samplesUntilFrame <= 0)
+        {
+            processAvailableFrames();
+            samplesUntilFrame = SoundShifterDSP::Config::hopSize;
+        }
+
+        for (int channel = 0; channel < channelsToProcess; ++channel)
+            buffer.setSample(channel, sample, overlapAdd.popSample(channel));
+
+        overlapAdd.advance();
+    }
+
     juce::ignoreUnused(pitchSemitones, fineCents, highQuality);
 }
 
-int PitchShiftEngine::getAnalysisLatencySamples() const noexcept
+int PitchShiftEngine::getLatencySamples() const noexcept
 {
-    return SoundShifterDSP::Config::fftSize - SoundShifterDSP::Config::hopSize;
+    return SoundShifterDSP::Config::fftSize;
 }
 
-void PitchShiftEngine::captureAnalysisFrames(const juce::AudioBuffer<float>& buffer) noexcept
+void PitchShiftEngine::processAvailableFrames() noexcept
 {
-    const auto channelsToProcess = juce::jmin(activeChannels, buffer.getNumChannels());
-    const auto samples = buffer.getNumSamples();
-
-    for (int channel = 0; channel < channelsToProcess; ++channel)
+    for (int channel = 0; channel < activeChannels; ++channel)
     {
-        const auto* source = buffer.getReadPointer(channel);
         auto& ring = inputRings[static_cast<size_t>(channel)];
-        auto& countdown = samplesUntilAnalysis[static_cast<size_t>(channel)];
+        if (!ring.isFull())
+            continue;
 
-        for (int sample = 0; sample < samples; ++sample)
-        {
-            ring.push(source[sample]);
-            --countdown;
+        auto& input = inputFrames[static_cast<size_t>(channel)];
+        auto& output = outputFrames[static_cast<size_t>(channel)];
 
-            if (countdown <= 0)
-            {
-                if (ring.isFull())
-                    analyseAvailableFrame(channel);
-
-                countdown = SoundShifterDSP::Config::hopSize;
-            }
-        }
+        ring.copyOldestToNewest(input.data(), SoundShifterDSP::Config::fftSize);
+        fftProcessors[static_cast<size_t>(channel)].processIdentityFrame(input.data(), output.data());
+        overlapAdd.addFrame(channel, output.data());
     }
-}
-
-void PitchShiftEngine::analyseAvailableFrame(int channel) noexcept
-{
-    auto& scratch = frameScratch[static_cast<size_t>(channel)];
-    inputRings[static_cast<size_t>(channel)].copyOldestToNewest(
-        scratch.data(),
-        SoundShifterDSP::Config::fftSize);
-    fftProcessors[static_cast<size_t>(channel)].analyseFrame(scratch.data());
 }

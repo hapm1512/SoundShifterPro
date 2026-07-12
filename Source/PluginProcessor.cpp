@@ -75,6 +75,7 @@ void SoundShifterProAudioProcessor::prepareToPlay(double sampleRate, int samples
 
     currentSampleRate.store(sampleRate);
     pitchShiftEngine.prepare(spec);
+    setLatencySamples(pitchShiftEngine.getLatencySamples());
     outputGainLinear.reset(sampleRate, 0.02);
     outputGainLinear.setCurrentAndTargetValue(1.0f);
 }
@@ -127,7 +128,7 @@ void SoundShifterProAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
         pitchShiftEngine.setHighQuality(highQuality);
         pitchShiftEngine.process(buffer);
 
-        // Mix remains transparent until Milestone 2 provides wet audio.
+        // Mix becomes active after the dry-delay path is added in Milestone 2D.
         juce::ignoreUnused(apvts.getRawParameterValue(ParameterIDs::mix)->load());
     }
 
