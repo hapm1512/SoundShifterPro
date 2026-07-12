@@ -46,13 +46,13 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
     latencyLabel.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(latencyLabel);
 
-    engineLabel.setText("ENGINE READY", juce::dontSendNotification);
+    engineLabel.setText("DSP FOUNDATION READY", juce::dontSendNotification);
     engineLabel.setFont(SoundShifterTheme::labelFont(10.0f));
     engineLabel.setColour(juce::Label::textColourId, SoundShifterTheme::accent);
     engineLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(engineLabel);
 
-    versionLabel.setText("v0.2.0", juce::dontSendNotification);
+    versionLabel.setText("v0.2.1", juce::dontSendNotification);
     versionLabel.setFont(SoundShifterTheme::labelFont(10.0f));
     versionLabel.setColour(juce::Label::textColourId, SoundShifterTheme::textMuted);
     versionLabel.setJustificationType(juce::Justification::centredRight);

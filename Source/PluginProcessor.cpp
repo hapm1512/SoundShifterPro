@@ -123,7 +123,8 @@ void SoundShifterProAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
 
         pitchShiftEngine.setPitchSemitones(pitch);
         pitchShiftEngine.setFineCents(fine);
-        juce::ignoreUnused(apvts.getRawParameterValue(ParameterIDs::hq)->load());
+        const auto highQuality = apvts.getRawParameterValue(ParameterIDs::hq)->load() > 0.5f;
+        pitchShiftEngine.setHighQuality(highQuality);
         pitchShiftEngine.process(buffer);
 
         // Mix remains transparent until Milestone 2 provides wet audio.

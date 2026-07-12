@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(SoundShifterPro VERSION 0.2.0 LANGUAGES CXX)
+project(SoundShifterPro VERSION 0.2.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,7 +31,14 @@ target_sources(SoundShifterPro PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.h
     Source/PluginEditor.cpp
+    DSP/DSPConfig.h
+    DSP/AudioBlock.h
+    DSP/RingBuffer.h
+    DSP/WindowProcessor.h
+    DSP/FFTProcessor.h
+    DSP/OverlapAdd.h
     DSP/PitchShiftEngine.h
+    DSP/PitchShiftEngine.cpp
     GUI/Theme.h
     GUI/SoundShifterLookAndFeel.h
     GUI/StereoMeter.h
