@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(SoundShifterPro VERSION 0.3.1 LANGUAGES CXX)
+project(SoundShifterPro VERSION 0.3.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,6 +40,8 @@ target_sources(SoundShifterPro PRIVATE
     DSP/PeakDetector.cpp
     DSP/PhaseLock.h
     DSP/PhaseLock.cpp
+    DSP/IdentityPhaseLock.h
+    DSP/IdentityPhaseLock.cpp
     DSP/OverlapAdd.h
     DSP/PitchShiftEngine.h
     DSP/PitchShiftEngine.cpp

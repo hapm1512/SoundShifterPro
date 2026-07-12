@@ -4,7 +4,7 @@
 #include "DSPConfig.h"
 #include "WindowProcessor.h"
 #include "PeakDetector.h"
-#include "PhaseLock.h"
+#include "IdentityPhaseLock.h"
 
 class FFTProcessor
 {
@@ -28,7 +28,7 @@ public:
         mappedAnalysisPhase.assign(static_cast<size_t>(numBins), 0.0f);
         outputPhase.assign(static_cast<size_t>(numBins), 0.0f);
         peakDetector.prepare(numBins);
-        phaseLock.prepare(numBins);
+        identityPhaseLock.prepare(numBins, SoundShifterDSP::Config::maxPeaks);
         reset();
     }
 
@@ -47,7 +47,7 @@ public:
         std::fill(mappedAnalysisPhase.begin(), mappedAnalysisPhase.end(), 0.0f);
         std::fill(outputPhase.begin(), outputPhase.end(), 0.0f);
         peakDetector.reset();
-        phaseLock.reset();
+        identityPhaseLock.reset();
     }
 
     void processPitchFrame(const float* input, float* output, float pitchRatio) noexcept
@@ -136,7 +136,7 @@ public:
                 : 0.0f;
         }
 
-        phaseLock.apply(outputPhase.data(),
+        identityPhaseLock.apply(outputPhase.data(),
                         mappedAnalysisPhase.data(),
                         synthesisMagnitude.data(),
                         peakDetector.getPeakIndices(),
@@ -226,6 +226,6 @@ private:
     std::vector<float> mappedAnalysisPhase;
     std::vector<float> outputPhase;
     PeakDetector peakDetector;
-    PhaseLock phaseLock;
+    IdentityPhaseLock identityPhaseLock;
     double sampleRate = 44100.0;
 };
