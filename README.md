@@ -50,3 +50,14 @@ Milestone 2E will improve phase locking, transient preservation, stereo coherenc
 - Preallocated peak storage.
 - No audio-thread allocations.
 - Peak data exposed for Phase Locking.
+
+
+## Epic 3B - Phase Lock Engine
+
+- Spectral peaks act as phase anchors.
+- Neighboring bins follow the nearest anchor region.
+- Relative analysis phase is preserved around peaks.
+- Reduces phasing and metallic smearing.
+- Preallocated buffers only.
+- No allocations inside the audio callback.
+- Version: 0.3.1.

@@ -4,6 +4,7 @@
 #include "DSPConfig.h"
 #include "WindowProcessor.h"
 #include "PeakDetector.h"
+#include "PhaseLock.h"
 
 class FFTProcessor
 {
@@ -19,9 +20,15 @@ public:
         sumPhase.assign(static_cast<size_t>(numBins), 0.0f);
         analysisMagnitude.assign(static_cast<size_t>(numBins), 0.0f);
         analysisFrequency.assign(static_cast<size_t>(numBins), 0.0f);
+        analysisPhase.assign(static_cast<size_t>(numBins), 0.0f);
         synthesisMagnitude.assign(static_cast<size_t>(numBins), 0.0f);
         synthesisFrequency.assign(static_cast<size_t>(numBins), 0.0f);
+        synthesisPhaseReal.assign(static_cast<size_t>(numBins), 0.0f);
+        synthesisPhaseImag.assign(static_cast<size_t>(numBins), 0.0f);
+        mappedAnalysisPhase.assign(static_cast<size_t>(numBins), 0.0f);
+        outputPhase.assign(static_cast<size_t>(numBins), 0.0f);
         peakDetector.prepare(numBins);
+        phaseLock.prepare(numBins);
         reset();
     }
 
@@ -32,9 +39,15 @@ public:
         std::fill(sumPhase.begin(), sumPhase.end(), 0.0f);
         std::fill(analysisMagnitude.begin(), analysisMagnitude.end(), 0.0f);
         std::fill(analysisFrequency.begin(), analysisFrequency.end(), 0.0f);
+        std::fill(analysisPhase.begin(), analysisPhase.end(), 0.0f);
         std::fill(synthesisMagnitude.begin(), synthesisMagnitude.end(), 0.0f);
         std::fill(synthesisFrequency.begin(), synthesisFrequency.end(), 0.0f);
+        std::fill(synthesisPhaseReal.begin(), synthesisPhaseReal.end(), 0.0f);
+        std::fill(synthesisPhaseImag.begin(), synthesisPhaseImag.end(), 0.0f);
+        std::fill(mappedAnalysisPhase.begin(), mappedAnalysisPhase.end(), 0.0f);
+        std::fill(outputPhase.begin(), outputPhase.end(), 0.0f);
         peakDetector.reset();
+        phaseLock.reset();
     }
 
     void processPitchFrame(const float* input, float* output, float pitchRatio) noexcept
@@ -56,6 +69,10 @@ public:
 
         std::fill(synthesisMagnitude.begin(), synthesisMagnitude.end(), 0.0f);
         std::fill(synthesisFrequency.begin(), synthesisFrequency.end(), 0.0f);
+        std::fill(synthesisPhaseReal.begin(), synthesisPhaseReal.end(), 0.0f);
+        std::fill(synthesisPhaseImag.begin(), synthesisPhaseImag.end(), 0.0f);
+        std::fill(mappedAnalysisPhase.begin(), mappedAnalysisPhase.end(), 0.0f);
+        std::fill(outputPhase.begin(), outputPhase.end(), 0.0f);
 
         for (int bin = 0; bin < numBins; ++bin)
         {
@@ -71,6 +88,7 @@ public:
 
             const auto binDeviation = phaseDelta / expectedPhase;
             analysisMagnitude[static_cast<size_t>(bin)] = magnitude;
+            analysisPhase[static_cast<size_t>(bin)] = phase;
             analysisFrequency[static_cast<size_t>(bin)] =
                 (static_cast<float>(bin) + binDeviation) * frequencyPerBin;
         }
@@ -85,8 +103,10 @@ public:
             const auto shiftedFrequency = analysisFrequency[static_cast<size_t>(sourceBin)] * safeRatio;
             const auto magnitude = analysisMagnitude[static_cast<size_t>(sourceBin)];
 
-            addToSynthesisBin(targetBin, magnitude * (1.0f - fraction), shiftedFrequency);
-            addToSynthesisBin(targetBin + 1, magnitude * fraction, shiftedFrequency);
+            addToSynthesisBin(targetBin, magnitude * (1.0f - fraction), shiftedFrequency,
+                              analysisPhase[static_cast<size_t>(sourceBin)]);
+            addToSynthesisBin(targetBin + 1, magnitude * fraction, shiftedFrequency,
+                              analysisPhase[static_cast<size_t>(sourceBin)]);
         }
 
         juce::FloatVectorOperations::clear(transformData.data(), fftSize * 2);
@@ -104,10 +124,30 @@ public:
             const auto binDeviation = frequency / frequencyPerBin - static_cast<float>(bin);
             const auto phaseIncrement = (static_cast<float>(bin) + binDeviation) * expectedPhase;
             sumPhase[static_cast<size_t>(bin)] += phaseIncrement;
+            outputPhase[static_cast<size_t>(bin)] = sumPhase[static_cast<size_t>(bin)];
 
-            setComplex(bin,
-                       magnitude * std::cos(sumPhase[static_cast<size_t>(bin)]),
-                       magnitude * std::sin(sumPhase[static_cast<size_t>(bin)]));
+            const auto phaseWeight = std::sqrt(synthesisPhaseReal[static_cast<size_t>(bin)]
+                                              * synthesisPhaseReal[static_cast<size_t>(bin)]
+                                              + synthesisPhaseImag[static_cast<size_t>(bin)]
+                                              * synthesisPhaseImag[static_cast<size_t>(bin)]);
+            mappedAnalysisPhase[static_cast<size_t>(bin)] = phaseWeight > 1.0e-12f
+                ? std::atan2(synthesisPhaseImag[static_cast<size_t>(bin)],
+                             synthesisPhaseReal[static_cast<size_t>(bin)])
+                : 0.0f;
+        }
+
+        phaseLock.apply(outputPhase.data(),
+                        mappedAnalysisPhase.data(),
+                        synthesisMagnitude.data(),
+                        peakDetector.getPeakIndices(),
+                        peakDetector.getPeakCount(),
+                        safeRatio);
+
+        for (int bin = 0; bin < numBins; ++bin)
+        {
+            const auto magnitude = synthesisMagnitude[static_cast<size_t>(bin)];
+            const auto phase = outputPhase[static_cast<size_t>(bin)];
+            setComplex(bin, magnitude * std::cos(phase), magnitude * std::sin(phase));
         }
 
         fft->performRealOnlyInverseTransform(transformData.data());
@@ -159,13 +199,16 @@ private:
         transformData[static_cast<size_t>(bin * 2 + 1)] = imag;
     }
 
-    void addToSynthesisBin(int bin, float weightedMagnitude, float shiftedFrequency) noexcept
+    void addToSynthesisBin(int bin, float weightedMagnitude, float shiftedFrequency,
+                           float sourcePhase) noexcept
     {
         if (!juce::isPositiveAndBelow(bin, numBins) || weightedMagnitude <= 0.0f)
             return;
 
         synthesisMagnitude[static_cast<size_t>(bin)] += weightedMagnitude;
         synthesisFrequency[static_cast<size_t>(bin)] += weightedMagnitude * shiftedFrequency;
+        synthesisPhaseReal[static_cast<size_t>(bin)] += weightedMagnitude * std::cos(sourcePhase);
+        synthesisPhaseImag[static_cast<size_t>(bin)] += weightedMagnitude * std::sin(sourcePhase);
     }
 
     std::unique_ptr<juce::dsp::FFT> fft;
@@ -175,8 +218,14 @@ private:
     std::vector<float> sumPhase;
     std::vector<float> analysisMagnitude;
     std::vector<float> analysisFrequency;
+    std::vector<float> analysisPhase;
     std::vector<float> synthesisMagnitude;
     std::vector<float> synthesisFrequency;
+    std::vector<float> synthesisPhaseReal;
+    std::vector<float> synthesisPhaseImag;
+    std::vector<float> mappedAnalysisPhase;
+    std::vector<float> outputPhase;
     PeakDetector peakDetector;
+    PhaseLock phaseLock;
     double sampleRate = 44100.0;
 };
