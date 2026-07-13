@@ -181,8 +181,12 @@ void SoundShifterProAudioProcessor::processBlock(
     const auto bypassed = bypassParameter != nullptr
         && bypassParameter->load() > 0.5f;
 
-    const auto highQuality = hqParameter == nullptr
-        || hqParameter->load() > 0.5f;
+    const bool highQuality =
+        hqParameter == nullptr || hqParameter->load() > 0.5f;
+
+    static bool lastHQ = true;
+    if (lastHQ != highQuality)
+        lastHQ = highQuality;
 
     pitchShiftEngine.setPitchSemitones(pitch);
     pitchShiftEngine.setFineCents(fine);
@@ -205,7 +209,8 @@ void SoundShifterProAudioProcessor::processBlock(
         bypassed);
 
     applyOutputGain(buffer, numSamples);
-    updateMeters(buffer, false);
+    if (highQuality || (numSamples >= 128))
+        updateMeters(buffer, false);
 }
 
 void SoundShifterProAudioProcessor::applyDryWetMix(
