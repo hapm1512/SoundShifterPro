@@ -28,6 +28,7 @@ public:
         adaptiveMagnitude.assign(static_cast<size_t>(numBins), 0.0f);
         spectralEnvelope.assign(static_cast<size_t>(numBins), 0.0f);
         leakageCompensatedMagnitude.assign(static_cast<size_t>(numBins), 0.0f);
+        mappedEnergy.assign(static_cast<size_t>(numBins), 0.0f);
         mappedAnalysisPhase.assign(static_cast<size_t>(numBins), 0.0f);
         outputPhase.assign(static_cast<size_t>(numBins), 0.0f);
         peakDetector.prepare(numBins);
@@ -52,6 +53,7 @@ public:
         std::fill(leakageCompensatedMagnitude.begin(),
                   leakageCompensatedMagnitude.end(),
                   0.0f);
+        std::fill(mappedEnergy.begin(), mappedEnergy.end(), 0.0f);
         std::fill(mappedAnalysisPhase.begin(), mappedAnalysisPhase.end(), 0.0f);
         std::fill(outputPhase.begin(), outputPhase.end(), 0.0f);
         peakDetector.reset();
@@ -95,6 +97,7 @@ public:
         std::fill(leakageCompensatedMagnitude.begin(),
                   leakageCompensatedMagnitude.end(),
                   0.0f);
+        std::fill(mappedEnergy.begin(), mappedEnergy.end(), 0.0f);
         std::fill(mappedAnalysisPhase.begin(), mappedAnalysisPhase.end(), 0.0f);
         std::fill(outputPhase.begin(), outputPhase.end(), 0.0f);
 
@@ -159,18 +162,22 @@ public:
                 * enhancement
                 * binWeight;
 
-            addToSynthesisBin(
+            distributePitchMappedEnergy(
                 targetBin,
-                magnitude * (1.0f - fraction),
+                fraction,
+                magnitude,
                 shiftedFrequency,
-                analysisPhase[static_cast<size_t>(sourceBin)]);
-
-            addToSynthesisBin(
-                targetBin + 1,
-                magnitude * fraction,
-                shiftedFrequency,
-                analysisPhase[static_cast<size_t>(sourceBin)]);
+                analysisPhase[static_cast<size_t>(sourceBin)],
+                sourceBin,
+                safeRatio,
+                safeTransient,
+                highQuality);
         }
+
+        preserveMappedEnergy(
+            leakageCompensatedMagnitude,
+            synthesisMagnitude,
+            highQuality);
 
         juce::FloatVectorOperations::clear(transformData.data(), fftSize * 2);
 
@@ -640,6 +647,176 @@ private:
         return juce::jlimit(1.0f, 1.10f, enhancement);
     }
 
+    void distributePitchMappedEnergy(int targetBin,
+                                     float fraction,
+                                     float magnitude,
+                                     float shiftedFrequency,
+                                     float sourcePhase,
+                                     int sourceBin,
+                                     float pitchRatio,
+                                     float transientAmount,
+                                     bool highQuality) noexcept
+    {
+        if (magnitude <= 0.0f)
+            return;
+
+        if (!highQuality)
+        {
+            addToSynthesisBin(
+                targetBin,
+                magnitude * (1.0f - fraction),
+                shiftedFrequency,
+                sourcePhase);
+
+            addToSynthesisBin(
+                targetBin + 1,
+                magnitude * fraction,
+                shiftedFrequency,
+                sourcePhase);
+            return;
+        }
+
+        const auto sourceMagnitude =
+            analysisMagnitude[static_cast<size_t>(sourceBin)];
+
+        const auto left =
+            sourceBin > 0
+                ? analysisMagnitude[static_cast<size_t>(sourceBin - 1)]
+                : sourceMagnitude;
+
+        const auto right =
+            sourceBin < numBins - 1
+                ? analysisMagnitude[static_cast<size_t>(sourceBin + 1)]
+                : sourceMagnitude;
+
+        const auto isPeak =
+            sourceMagnitude >= left && sourceMagnitude >= right;
+
+        const auto shiftDistance = juce::jlimit(
+            0.0f,
+            1.0f,
+            std::abs(std::log2(pitchRatio)));
+
+        const auto peakFocus =
+            isPeak
+                ? 0.82f + 0.14f * shiftDistance
+                : 0.58f + 0.10f * shiftDistance;
+
+        const auto transientFocus =
+            juce::jmap(transientAmount, peakFocus, 0.96f);
+
+        const auto cubicLeft =
+            0.5f * std::pow(1.0f - fraction, 2.0f);
+
+        const auto cubicCentre =
+            0.75f - std::pow(fraction - 0.5f, 2.0f);
+
+        const auto cubicRight =
+            0.5f * std::pow(fraction, 2.0f);
+
+        auto w0 = (1.0f - fraction) * transientFocus
+                + cubicLeft * (1.0f - transientFocus);
+
+        auto w1 = fraction * transientFocus
+                + cubicRight * (1.0f - transientFocus);
+
+        auto wMinus = (1.0f - transientFocus)
+                    * cubicCentre
+                    * (1.0f - fraction)
+                    * 0.18f;
+
+        auto wPlus = (1.0f - transientFocus)
+                   * cubicCentre
+                   * fraction
+                   * 0.18f;
+
+        const auto totalWeight = wMinus + w0 + w1 + wPlus;
+
+        if (totalWeight > 1.0e-12f)
+        {
+            const auto normalise = 1.0f / totalWeight;
+            wMinus *= normalise;
+            w0 *= normalise;
+            w1 *= normalise;
+            wPlus *= normalise;
+        }
+
+        addToSynthesisBin(
+            targetBin - 1,
+            magnitude * wMinus,
+            shiftedFrequency,
+            sourcePhase);
+
+        addToSynthesisBin(
+            targetBin,
+            magnitude * w0,
+            shiftedFrequency,
+            sourcePhase);
+
+        addToSynthesisBin(
+            targetBin + 1,
+            magnitude * w1,
+            shiftedFrequency,
+            sourcePhase);
+
+        addToSynthesisBin(
+            targetBin + 2,
+            magnitude * wPlus,
+            shiftedFrequency,
+            sourcePhase);
+    }
+
+    void preserveMappedEnergy(const std::vector<float>& sourceMagnitude,
+                              std::vector<float>& targetMagnitude,
+                              bool highQuality) noexcept
+    {
+        if (!highQuality)
+            return;
+
+        double sourceEnergy = 0.0;
+        double targetEnergy = 0.0;
+
+        for (int bin = 0; bin < numBins; ++bin)
+        {
+            const auto source =
+                static_cast<double>(sourceMagnitude[static_cast<size_t>(bin)]);
+
+            const auto target =
+                static_cast<double>(targetMagnitude[static_cast<size_t>(bin)]);
+
+            sourceEnergy += source * source;
+            targetEnergy += target * target;
+        }
+
+        if (sourceEnergy <= 1.0e-18 || targetEnergy <= 1.0e-18)
+            return;
+
+        const auto gain = juce::jlimit(
+            0.90f,
+            1.12f,
+            static_cast<float>(std::sqrt(sourceEnergy / targetEnergy)));
+
+        juce::FloatVectorOperations::multiply(
+            targetMagnitude.data(),
+            gain,
+            numBins);
+
+        juce::FloatVectorOperations::multiply(
+            synthesisFrequency.data(),
+            gain,
+            numBins);
+
+        juce::FloatVectorOperations::multiply(
+            synthesisPhaseReal.data(),
+            gain,
+            numBins);
+
+        juce::FloatVectorOperations::multiply(
+            synthesisPhaseImag.data(),
+            gain,
+            numBins);
+    }
+
     void addToSynthesisBin(int bin, float weightedMagnitude, float shiftedFrequency,
                            float sourcePhase) noexcept
     {
@@ -667,6 +844,7 @@ private:
     std::vector<float> adaptiveMagnitude;
     std::vector<float> spectralEnvelope;
     std::vector<float> leakageCompensatedMagnitude;
+    std::vector<float> mappedEnergy;
     std::vector<float> mappedAnalysisPhase;
     std::vector<float> outputPhase;
     PeakDetector peakDetector;
