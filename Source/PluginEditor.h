@@ -46,6 +46,10 @@ private:
     juce::TextButton hqButton { "HQ" };
     juce::TextButton bypassButton { "BYPASS" };
 
+    juce::TextButton learnDownButton { "LEARN ▼" };
+    juce::TextButton learnUpButton { "LEARN ▲" };
+    juce::TextButton learnResetButton { "LEARN R" };
+
     StereoMeter inputMeter;
     StereoMeter outputMeter;
 

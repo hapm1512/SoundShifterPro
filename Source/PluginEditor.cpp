@@ -31,6 +31,28 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
     addAndMakeVisible(hqButton);
     addAndMakeVisible(bypassButton);
 
+    addAndMakeVisible(learnDownButton);
+    addAndMakeVisible(learnUpButton);
+    addAndMakeVisible(learnResetButton);
+
+    learnDownButton.onClick = [this]
+    {
+        processor.beginMidiLearn(
+            SoundShifterProAudioProcessor::MidiLearnTarget::pitchDown);
+    };
+
+    learnUpButton.onClick = [this]
+    {
+        processor.beginMidiLearn(
+            SoundShifterProAudioProcessor::MidiLearnTarget::pitchUp);
+    };
+
+    learnResetButton.onClick = [this]
+    {
+        processor.beginMidiLearn(
+            SoundShifterProAudioProcessor::MidiLearnTarget::pitchReset);
+    };
+
     inputCaption.setText("INPUT", juce::dontSendNotification);
     outputMeterCaption.setText("OUTPUT", juce::dontSendNotification);
     for (auto* label : { &inputCaption, &outputMeterCaption })
@@ -167,6 +189,11 @@ void SoundShifterProAudioProcessorEditor::resized()
     header.removeFromRight(8);
     hqButton.setBounds(header.removeFromRight(54).reduced(2, 12));
 
+    auto learnArea = area.removeFromTop(34);
+    learnDownButton.setBounds(learnArea.removeFromLeft(110).reduced(2));
+    learnUpButton.setBounds(learnArea.removeFromLeft(110).reduced(2));
+    learnResetButton.setBounds(learnArea.removeFromLeft(110).reduced(2));
+
     auto footer = area.removeFromBottom(36);
     latencyLabel.setBounds(footer.removeFromLeft(210));
     versionLabel.setBounds(footer.removeFromRight(90));
@@ -231,4 +258,22 @@ void SoundShifterProAudioProcessorEditor::timerCallback()
     const auto latencyMs = 1000.0 * static_cast<double>(processor.getLatencySamples()) / sampleRate;
     latencyLabel.setText("LATENCY  " + juce::String(latencyMs, 1) + " ms",
                          juce::dontSendNotification);
+
+    auto learning = processor.getMidiLearnTarget();
+
+    auto updateButton=[&](juce::TextButton& b,
+                          SoundShifterProAudioProcessor::MidiLearnTarget t)
+    {
+        const bool active = learning==t;
+        b.setColour(juce::TextButton::buttonColourId,
+                    active ? juce::Colours::orange
+                           : SoundShifterTheme::panelRaised);
+    };
+
+    updateButton(learnDownButton,
+        SoundShifterProAudioProcessor::MidiLearnTarget::pitchDown);
+    updateButton(learnUpButton,
+        SoundShifterProAudioProcessor::MidiLearnTarget::pitchUp);
+    updateButton(learnResetButton,
+        SoundShifterProAudioProcessor::MidiLearnTarget::pitchReset);
 }
