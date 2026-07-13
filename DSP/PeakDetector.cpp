@@ -105,8 +105,21 @@ void PeakDetector::detect(const float* magnitudes, int magnitudeCount) noexcept
             1.0f,
             static_cast<float>(trackedLifetime) / 10.0f);
 
-        const auto requiredThreshold = adaptiveThreshold
-            * (hasTrack ? juce::jmap(lifetimeSupport, 0.68f, 0.52f) : 1.0f);
+        const auto confidenceSupport = hasTrack
+            ? previousConfidence[static_cast<size_t>(trackedBin)]
+            : 0.0f;
+
+        const auto hysteresisFactor = hasTrack
+            ? juce::jlimit(
+                  0.46f,
+                  0.72f,
+                  0.72f
+                      - 0.12f * lifetimeSupport
+                      - 0.14f * confidenceSupport)
+            : 1.0f;
+
+        const auto requiredThreshold =
+            adaptiveThreshold * hysteresisFactor;
 
         if (centre < requiredThreshold)
             continue;
@@ -114,7 +127,11 @@ void PeakDetector::detect(const float* magnitudes, int magnitudeCount) noexcept
         const auto prominence =
             calculateLocalProminence(magnitudes, bin, binsToScan);
 
-        if (!hasTrack && prominence < 0.05f)
+        const auto minimumProminence = hasTrack
+            ? juce::jmap(lifetimeSupport, 0.035f, 0.018f)
+            : 0.060f;
+
+        if (prominence < minimumProminence)
             continue;
 
         addPeak(bin,
@@ -171,9 +188,13 @@ int PeakDetector::findTrackedPeak(int bin, int binsToScan) const noexcept
             1.0f,
             static_cast<float>(previousLifetime[static_cast<size_t>(candidate)]) / 12.0f);
 
+        const auto confidence =
+            previousConfidence[static_cast<size_t>(candidate)];
+
         const auto score =
-            previousConfidence[static_cast<size_t>(candidate)]
-            * (0.72f * distanceWeight + 0.28f * lifetimeWeight);
+            0.58f * confidence
+            + 0.27f * distanceWeight
+            + 0.15f * lifetimeWeight;
 
         if (score > bestScore)
         {
@@ -195,15 +216,33 @@ float PeakDetector::calculateLocalProminence(const float* magnitudes,
     const auto right1 = magnitudes[bin + 1];
     const auto right2 = magnitudes[juce::jmin(binsToScan - 1, bin + 2)];
 
-    const auto shoulder =
-        0.35f * (left2 + right2)
-        + 0.65f * (left1 + right1);
+    const auto nearShoulder =
+        0.5f * (left1 + right1);
+
+    const auto farShoulder =
+        0.5f * (left2 + right2);
+
+    const auto localReference =
+        0.72f * nearShoulder
+        + 0.28f * farShoulder;
+
+    const auto curvature =
+        juce::jmax(
+            0.0f,
+            centre - 0.5f * (left1 + right1));
+
+    const auto prominence =
+        (centre - localReference)
+        / (centre + minimumMagnitude);
+
+    const auto curvatureRatio =
+        curvature / (centre + minimumMagnitude);
 
     return juce::jlimit(
         0.0f,
         1.0f,
-        (centre - 0.5f * shoulder)
-            / (centre + minimumMagnitude));
+        0.72f * prominence
+            + 0.28f * curvatureRatio);
 }
 
 void PeakDetector::addPeak(int bin,
@@ -223,7 +262,8 @@ void PeakDetector::addPeak(int bin,
     auto confidence = juce::jlimit(
         0.0f,
         1.0f,
-        0.62f * normalisedMagnitude + 0.38f * prominence);
+        0.54f * normalisedMagnitude
+            + 0.46f * prominence);
 
     uint16_t lifetime = 1;
 
@@ -232,15 +272,26 @@ void PeakDetector::addPeak(int bin,
         const auto previous =
             previousConfidence[static_cast<size_t>(trackedBin)];
 
+        const auto previousLifetimeValue =
+            previousLifetime[static_cast<size_t>(trackedBin)];
+
+        const auto lifetimeSupport = juce::jlimit(
+            0.0f,
+            1.0f,
+            static_cast<float>(previousLifetimeValue) / 16.0f);
+
+        const auto persistenceBlend =
+            0.72f + 0.16f * lifetimeSupport;
+
         confidence = juce::jlimit(
             0.0f,
             1.0f,
-            0.76f * previous + 0.24f * confidence);
+            persistenceBlend * previous
+                + (1.0f - persistenceBlend) * confidence);
 
         lifetime = static_cast<uint16_t>(juce::jmin(
             65535,
-            static_cast<int>(
-                previousLifetime[static_cast<size_t>(trackedBin)]) + 1));
+            static_cast<int>(previousLifetimeValue) + 1));
     }
 
     constexpr int minimumPeakSpacing = 2;
@@ -258,10 +309,24 @@ void PeakDetector::addPeak(int bin,
             const auto previousLifetimeValue =
                 peakLifetime[static_cast<size_t>(previousIndex)];
 
+            const auto currentScore =
+                0.68f * confidence
+                + 0.32f * juce::jlimit(
+                    0.0f,
+                    1.0f,
+                    static_cast<float>(lifetime) / 24.0f);
+
+            const auto previousScore =
+                0.68f * previousConfidenceValue
+                + 0.32f * juce::jlimit(
+                    0.0f,
+                    1.0f,
+                    static_cast<float>(previousLifetimeValue) / 24.0f);
+
             const auto replacePrevious =
-                confidence > previousConfidenceValue + 0.03f
-                || (std::abs(confidence - previousConfidenceValue) <= 0.03f
-                    && lifetime > previousLifetimeValue);
+                currentScore > previousScore + 0.018f
+                || (std::abs(currentScore - previousScore) <= 0.018f
+                    && confidence > previousConfidenceValue);
 
             if (!replacePrevious)
                 return;
