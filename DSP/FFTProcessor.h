@@ -71,6 +71,8 @@ public:
                                  * static_cast<float>(hopSize)
                                  / static_cast<float>(fftSize);
 
+        window.setHighQuality(highQuality);
+
         juce::FloatVectorOperations::clear(transformData.data(), fftSize * 2);
         juce::FloatVectorOperations::copy(transformData.data(), input, fftSize);
         window.applyAnalysis(transformData.data(), fftSize);
@@ -106,16 +108,36 @@ public:
 
         for (int sourceBin = 0; sourceBin < numBins; ++sourceBin)
         {
-            const auto targetPosition = static_cast<float>(sourceBin) * safeRatio;
-            const auto targetBin = static_cast<int>(targetPosition);
-            const auto fraction = targetPosition - static_cast<float>(targetBin);
-            const auto shiftedFrequency = analysisFrequency[static_cast<size_t>(sourceBin)] * safeRatio;
-            const auto magnitude = analysisMagnitude[static_cast<size_t>(sourceBin)];
+            const auto interpolationOffset =
+                highQuality ? calculatePeakInterpolationOffset(sourceBin) : 0.0f;
 
-            addToSynthesisBin(targetBin, magnitude * (1.0f - fraction), shiftedFrequency,
-                              analysisPhase[static_cast<size_t>(sourceBin)]);
-            addToSynthesisBin(targetBin + 1, magnitude * fraction, shiftedFrequency,
-                              analysisPhase[static_cast<size_t>(sourceBin)]);
+            const auto sourcePosition =
+                static_cast<float>(sourceBin) + interpolationOffset;
+
+            const auto targetPosition = sourcePosition * safeRatio;
+            const auto targetBin = static_cast<int>(std::floor(targetPosition));
+            const auto fraction = targetPosition - static_cast<float>(targetBin);
+
+            const auto shiftedFrequency =
+                analysisFrequency[static_cast<size_t>(sourceBin)] * safeRatio;
+
+            const auto enhancement =
+                calculateHarmonicEnhancement(sourceBin, safeRatio, highQuality);
+
+            const auto magnitude =
+                analysisMagnitude[static_cast<size_t>(sourceBin)] * enhancement;
+
+            addToSynthesisBin(
+                targetBin,
+                magnitude * (1.0f - fraction),
+                shiftedFrequency,
+                analysisPhase[static_cast<size_t>(sourceBin)]);
+
+            addToSynthesisBin(
+                targetBin + 1,
+                magnitude * fraction,
+                shiftedFrequency,
+                analysisPhase[static_cast<size_t>(sourceBin)]);
         }
 
         juce::FloatVectorOperations::clear(transformData.data(), fftSize * 2);
@@ -226,6 +248,53 @@ private:
 
         transformData[static_cast<size_t>(bin * 2)] = real;
         transformData[static_cast<size_t>(bin * 2 + 1)] = imag;
+    }
+
+    [[nodiscard]] float calculatePeakInterpolationOffset(int bin) const noexcept
+    {
+        if (bin <= 0 || bin >= numBins - 1)
+            return 0.0f;
+
+        const auto left = analysisMagnitude[static_cast<size_t>(bin - 1)];
+        const auto centre = analysisMagnitude[static_cast<size_t>(bin)];
+        const auto right = analysisMagnitude[static_cast<size_t>(bin + 1)];
+
+        if (centre <= left || centre < right)
+            return 0.0f;
+
+        const auto denominator = left - 2.0f * centre + right;
+
+        if (std::abs(denominator) <= 1.0e-12f)
+            return 0.0f;
+
+        const auto offset = 0.5f * (left - right) / denominator;
+        return juce::jlimit(-0.5f, 0.5f, offset);
+    }
+
+    [[nodiscard]] static float calculateHarmonicEnhancement(
+        int bin,
+        float pitchRatio,
+        bool highQuality) noexcept
+    {
+        if (!highQuality)
+            return 1.0f;
+
+        const auto normalisedBin =
+            static_cast<float>(bin) / static_cast<float>(numBins - 1);
+
+        const auto shiftDistance =
+            juce::jlimit(0.0f, 1.0f, std::abs(std::log2(pitchRatio)));
+
+        const auto presenceWeight =
+            juce::jlimit(0.0f, 1.0f, (normalisedBin - 0.18f) / 0.62f);
+
+        const auto airRolloff =
+            1.0f - juce::jlimit(0.0f, 1.0f, (normalisedBin - 0.82f) / 0.18f);
+
+        const auto enhancement =
+            1.0f + 0.10f * shiftDistance * presenceWeight * airRolloff;
+
+        return juce::jlimit(1.0f, 1.10f, enhancement);
     }
 
     void addToSynthesisBin(int bin, float weightedMagnitude, float shiftedFrequency,

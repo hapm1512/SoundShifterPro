@@ -28,6 +28,7 @@ void PitchShiftEngine::reset() noexcept
     {
         inputRings[static_cast<size_t>(channel)].reset();
         fftProcessors[static_cast<size_t>(channel)].reset();
+        transientDetectors[static_cast<size_t>(channel)].reset();
 
         std::fill(inputFrames[static_cast<size_t>(channel)].begin(),
                   inputFrames[static_cast<size_t>(channel)].end(), 0.0f);
@@ -111,7 +112,12 @@ void PitchShiftEngine::processAvailableFrames() noexcept
 
         ring.copyOldestToNewest(input.data(), SoundShifterDSP::Config::fftSize);
 
-        constexpr float transientAmount = 0.0f;
+        const auto transientAmount =
+            SoundShifterDSP::Config::enableTransient
+                ? transientDetectors[static_cast<size_t>(channel)].process(
+                      input.data(),
+                      SoundShifterDSP::Config::fftSize)
+                : 0.0f;
 
         fftProcessors[static_cast<size_t>(channel)].processPitchFrame(
             input.data(),

@@ -5,6 +5,7 @@
 #include "FFTProcessor.h"
 #include "OverlapAdd.h"
 #include "RingBuffer.h"
+#include "TransientDetector.h"
 
 class PitchShiftEngine
 {
@@ -33,6 +34,7 @@ private:
     juce::dsp::ProcessSpec spec {};
     std::array<RingBuffer, SoundShifterDSP::Config::maxChannels> inputRings;
     std::array<FFTProcessor, SoundShifterDSP::Config::maxChannels> fftProcessors;
+    std::array<TransientDetector, SoundShifterDSP::Config::maxChannels> transientDetectors;
     std::array<std::vector<float>, SoundShifterDSP::Config::maxChannels> inputFrames;
     std::array<std::vector<float>, SoundShifterDSP::Config::maxChannels> outputFrames;
     OverlapAdd overlapAdd;
