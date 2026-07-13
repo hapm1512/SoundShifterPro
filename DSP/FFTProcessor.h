@@ -608,17 +608,23 @@ private:
             || targetEnvelope <= SoundShifterDSP::Config::magnitudeFloor)
             return 1.0f;
 
-        const auto rawRatio = juce::jlimit(
-            0.72f,
-            1.38f,
-            targetEnvelope
-                / (sourceEnvelope
-                   + SoundShifterDSP::Config::magnitudeFloor));
-
         const auto shiftDistance = juce::jlimit(
             0.0f,
             1.0f,
             std::abs(std::log2(pitchRatio)));
+
+        const auto ratioMinimum =
+            juce::jmap(shiftDistance, 0.90f, 0.74f);
+
+        const auto ratioMaximum =
+            juce::jmap(shiftDistance, 1.10f, 1.34f);
+
+        const auto rawRatio = juce::jlimit(
+            ratioMinimum,
+            ratioMaximum,
+            targetEnvelope
+                / (sourceEnvelope
+                   + SoundShifterDSP::Config::magnitudeFloor));
 
         const auto transientProtection =
             1.0f - 0.82f * transientAmount;
@@ -639,9 +645,13 @@ private:
                 1.0f,
                 (normalisedTarget - 0.82f) / 0.18f);
 
+        const auto shiftResponse =
+            shiftDistance * shiftDistance
+            * (3.0f - 2.0f * shiftDistance);
+
         const auto correctionAmount =
-            0.62f
-            * shiftDistance
+            0.66f
+            * shiftResponse
             * transientProtection
             * lowBandProtection
             * highBandProtection;
