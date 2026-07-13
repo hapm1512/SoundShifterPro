@@ -174,6 +174,11 @@ public:
                 highQuality);
         }
 
+        applyHarmonicBinRedistribution(
+            safeRatio,
+            safeTransient,
+            highQuality);
+
         preserveMappedEnergy(
             leakageCompensatedMagnitude,
             synthesisMagnitude,
@@ -764,6 +769,124 @@ private:
             magnitude * wPlus,
             shiftedFrequency,
             sourcePhase);
+    }
+
+    void applyHarmonicBinRedistribution(float pitchRatio,
+                                         float transientAmount,
+                                         bool highQuality) noexcept
+    {
+        if (!highQuality)
+            return;
+
+        const auto shiftDistance = juce::jlimit(
+            0.0f,
+            1.0f,
+            std::abs(std::log2(pitchRatio)));
+
+        const auto transientProtection =
+            1.0f - 0.85f * transientAmount;
+
+        juce::FloatVectorOperations::copy(
+            mappedEnergy.data(),
+            synthesisMagnitude.data(),
+            numBins);
+
+        for (int bin = 2; bin < numBins - 2; ++bin)
+        {
+            const auto centre =
+                mappedEnergy[static_cast<size_t>(bin)];
+
+            if (centre <= 1.0e-12f)
+                continue;
+
+            const auto left1 =
+                mappedEnergy[static_cast<size_t>(bin - 1)];
+
+            const auto right1 =
+                mappedEnergy[static_cast<size_t>(bin + 1)];
+
+            const auto left2 =
+                mappedEnergy[static_cast<size_t>(bin - 2)];
+
+            const auto right2 =
+                mappedEnergy[static_cast<size_t>(bin + 2)];
+
+            const auto localAverage =
+                0.44f * centre
+                + 0.20f * (left1 + right1)
+                + 0.08f * (left2 + right2);
+
+            const auto localMaximum =
+                juce::jmax(
+                    centre,
+                    juce::jmax(
+                        juce::jmax(left1, right1),
+                        juce::jmax(left2, right2)));
+
+            const auto harmonicConfidence =
+                localMaximum > 1.0e-12f
+                    ? juce::jlimit(
+                          0.0f,
+                          1.0f,
+                          centre / localMaximum)
+                    : 0.0f;
+
+            const auto valleyAmount =
+                localAverage > 1.0e-12f
+                    ? juce::jlimit(
+                          0.0f,
+                          1.0f,
+                          (localAverage - centre)
+                              / localAverage)
+                    : 0.0f;
+
+            const auto normalisedBin =
+                static_cast<float>(bin)
+                / static_cast<float>(numBins - 1);
+
+            const auto lowBandProtection =
+                1.0f - 0.65f * juce::jlimit(
+                    0.0f,
+                    1.0f,
+                    (0.16f - normalisedBin) / 0.16f);
+
+            const auto highBandProtection =
+                1.0f - 0.45f * juce::jlimit(
+                    0.0f,
+                    1.0f,
+                    (normalisedBin - 0.78f) / 0.22f);
+
+            const auto redistributionStrength =
+                0.10f
+                * shiftDistance
+                * transientProtection
+                * lowBandProtection
+                * highBandProtection;
+
+            const auto continuityBoost =
+                redistributionStrength
+                * valleyAmount
+                * (0.55f + 0.45f * harmonicConfidence);
+
+            const auto peakRestraint =
+                redistributionStrength
+                * juce::jlimit(
+                    0.0f,
+                    1.0f,
+                    (centre - localAverage)
+                        / (centre + 1.0e-12f))
+                * 0.35f;
+
+            const auto gain = juce::jlimit(
+                0.95f,
+                1.08f,
+                1.0f + continuityBoost - peakRestraint);
+
+            synthesisMagnitude[static_cast<size_t>(bin)] *= gain;
+            synthesisFrequency[static_cast<size_t>(bin)] *= gain;
+            synthesisPhaseReal[static_cast<size_t>(bin)] *= gain;
+            synthesisPhaseImag[static_cast<size_t>(bin)] *= gain;
+        }
     }
 
     void preserveMappedEnergy(const std::vector<float>& sourceMagnitude,
