@@ -21,7 +21,14 @@ public:
 
 private:
     [[nodiscard]] int findTrackedPeak(int bin, int binsToScan) const noexcept;
-    void addPeak(int bin, float magnitude, float maximumMagnitude) noexcept;
+    [[nodiscard]] float calculateLocalProminence(const float* magnitudes,
+                                                 int bin,
+                                                 int binsToScan) const noexcept;
+    void addPeak(int bin,
+                 float magnitude,
+                 float maximumMagnitude,
+                 float prominence,
+                 int trackedBin) noexcept;
 
     std::vector<int> peakIndices;
     std::vector<uint8_t> peakMask;

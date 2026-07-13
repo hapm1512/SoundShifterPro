@@ -96,6 +96,7 @@ void PitchShiftEngine::processAvailableFrames() noexcept
     const auto pitchRatio = std::pow(2.0f, totalSemitones / 12.0f);
 
     bool allFramesReady = true;
+    std::array<float, SoundShifterDSP::Config::maxChannels> transientAmounts {};
 
     for (int channel = 0; channel < activeChannels; ++channel)
     {
@@ -108,27 +109,47 @@ void PitchShiftEngine::processAvailableFrames() noexcept
         }
 
         auto& input = inputFrames[static_cast<size_t>(channel)];
-        auto& output = outputFrames[static_cast<size_t>(channel)];
 
-        ring.copyOldestToNewest(input.data(), SoundShifterDSP::Config::fftSize);
+        ring.copyOldestToNewest(
+            input.data(),
+            SoundShifterDSP::Config::fftSize);
 
-        const auto transientAmount =
+        transientAmounts[static_cast<size_t>(channel)] =
             SoundShifterDSP::Config::enableTransient
                 ? transientDetectors[static_cast<size_t>(channel)].process(
                       input.data(),
                       SoundShifterDSP::Config::fftSize)
                 : 0.0f;
+    }
+
+    if (!allFramesReady)
+        return;
+
+    if (activeChannels == 2)
+    {
+        const auto linkedTransient = juce::jlimit(
+            0.0f,
+            1.0f,
+            0.65f * juce::jmax(transientAmounts[0], transientAmounts[1])
+                + 0.35f * 0.5f
+                  * (transientAmounts[0] + transientAmounts[1]));
+
+        transientAmounts[0] = linkedTransient;
+        transientAmounts[1] = linkedTransient;
+    }
+
+    for (int channel = 0; channel < activeChannels; ++channel)
+    {
+        auto& input = inputFrames[static_cast<size_t>(channel)];
+        auto& output = outputFrames[static_cast<size_t>(channel)];
 
         fftProcessors[static_cast<size_t>(channel)].processPitchFrame(
             input.data(),
             output.data(),
             pitchRatio,
-            transientAmount,
+            transientAmounts[static_cast<size_t>(channel)],
             highQuality);
     }
-
-    if (!allFramesReady)
-        return;
 
     if (activeChannels == 2)
         applyStereoEnergyLink();
