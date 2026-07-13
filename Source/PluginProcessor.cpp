@@ -9,6 +9,9 @@ namespace ParameterIDs
     constexpr auto output = "output";
     constexpr auto bypass = "bypass";
     constexpr auto hq = "hq";
+    constexpr auto midiPitchDownCc = "midiPitchDownCc";
+    constexpr auto midiPitchUpCc = "midiPitchUpCc";
+    constexpr auto midiPitchResetCc = "midiPitchResetCc";
 }
 
 SoundShifterProAudioProcessor::SoundShifterProAudioProcessor()
@@ -63,6 +66,27 @@ SoundShifterProAudioProcessor::createParameterLayout()
         "High Quality",
         true));
 
+    parameters.push_back(std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { ParameterIDs::midiPitchDownCc, 1 },
+        "MIDI Pitch Down CC",
+        0,
+        127,
+        30));
+
+    parameters.push_back(std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { ParameterIDs::midiPitchUpCc, 1 },
+        "MIDI Pitch Up CC",
+        0,
+        127,
+        31));
+
+    parameters.push_back(std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { ParameterIDs::midiPitchResetCc, 1 },
+        "MIDI Pitch Reset CC",
+        0,
+        127,
+        32));
+
     return { parameters.begin(), parameters.end() };
 }
 
@@ -74,6 +98,12 @@ void SoundShifterProAudioProcessor::cacheParameterPointers() noexcept
     outputParameter = apvts.getRawParameterValue(ParameterIDs::output);
     bypassParameter = apvts.getRawParameterValue(ParameterIDs::bypass);
     hqParameter = apvts.getRawParameterValue(ParameterIDs::hq);
+    midiPitchDownCcParameter =
+        apvts.getRawParameterValue(ParameterIDs::midiPitchDownCc);
+    midiPitchUpCcParameter =
+        apvts.getRawParameterValue(ParameterIDs::midiPitchUpCc);
+    midiPitchResetCcParameter =
+        apvts.getRawParameterValue(ParameterIDs::midiPitchResetCc);
 
     jassert(pitchParameter != nullptr);
     jassert(fineParameter != nullptr);
@@ -81,6 +111,9 @@ void SoundShifterProAudioProcessor::cacheParameterPointers() noexcept
     jassert(outputParameter != nullptr);
     jassert(bypassParameter != nullptr);
     jassert(hqParameter != nullptr);
+    jassert(midiPitchDownCcParameter != nullptr);
+    jassert(midiPitchUpCcParameter != nullptr);
+    jassert(midiPitchResetCcParameter != nullptr);
 }
 
 void SoundShifterProAudioProcessor::prepareToPlay(double sampleRate,
@@ -409,11 +442,32 @@ void SoundShifterProAudioProcessor::handleMidiControl(
 
             if (pressed && !wasPressed)
             {
-                if (cc == 30)
+                const auto pitchDownCc = midiPitchDownCcParameter != nullptr
+                    ? juce::jlimit(
+                          0,
+                          127,
+                          juce::roundToInt(midiPitchDownCcParameter->load()))
+                    : 30;
+
+                const auto pitchUpCc = midiPitchUpCcParameter != nullptr
+                    ? juce::jlimit(
+                          0,
+                          127,
+                          juce::roundToInt(midiPitchUpCcParameter->load()))
+                    : 31;
+
+                const auto pitchResetCc = midiPitchResetCcParameter != nullptr
+                    ? juce::jlimit(
+                          0,
+                          127,
+                          juce::roundToInt(midiPitchResetCcParameter->load()))
+                    : 32;
+
+                if (cc == pitchDownCc)
                     changePitchBySemitones(-1.0f);
-                else if (cc == 31)
+                else if (cc == pitchUpCc)
                     changePitchBySemitones(1.0f);
-                else if (cc == 32)
+                else if (cc == pitchResetCc)
                     setPitchFromMidi(0.0f);
             }
         }

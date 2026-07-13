@@ -68,6 +68,9 @@ private:
     std::atomic<float>* outputParameter = nullptr;
     std::atomic<float>* bypassParameter = nullptr;
     std::atomic<float>* hqParameter = nullptr;
+    std::atomic<float>* midiPitchDownCcParameter = nullptr;
+    std::atomic<float>* midiPitchUpCcParameter = nullptr;
+    std::atomic<float>* midiPitchResetCcParameter = nullptr;
 
     juce::LinearSmoothedValue<float> outputGainLinear;
     juce::LinearSmoothedValue<float> mixSmoothed;
