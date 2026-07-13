@@ -462,20 +462,18 @@ void SoundShifterProAudioProcessor::createDelayedDry(
         auto* delayData = dryDelayBuffer.getWritePointer(channel);
         auto* dryData = delayedDryBlock.getWritePointer(channel);
 
-        auto writePosition = dryDelayWritePosition;
+        int writePosition = dryDelayWritePosition;
 
         for (int sample = 0; sample < numSamples; ++sample)
         {
-            auto readPosition = writePosition - delaySamples;
-
-            if (readPosition < 0)
-                readPosition += ringSize;
+            int readPosition = writePosition - delaySamples;
+            readPosition += (readPosition < 0) ? ringSize : 0;
 
             dryData[sample] = delayData[readPosition];
             delayData[writePosition] = inputData[sample];
 
-            if (++writePosition >= ringSize)
-                writePosition = 0;
+            ++writePosition;
+            writePosition -= (writePosition == ringSize) ? ringSize : 0;
         }
     }
 
