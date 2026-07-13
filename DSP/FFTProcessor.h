@@ -77,6 +77,7 @@ public:
 
         auto* const fftBuffer = transformData.data();
 
+        // SIMD-friendly contiguous operations
         juce::FloatVectorOperations::clear(fftBuffer, fftSize * 2);
         juce::FloatVectorOperations::copy(fftBuffer, input, fftSize);
         window.applyAnalysis(fftBuffer, fftSize);
@@ -1046,10 +1047,11 @@ private:
             maximumGain,
             static_cast<float>(std::sqrt(sourceEnergy / targetEnergy)));
 
-        juce::FloatVectorOperations::multiply(
-            targetMagnitude.data(),
-            gain,
-            numBins);
+        if (gain != 1.0f)
+            juce::FloatVectorOperations::multiply(
+                targetMagnitude.data(),
+                gain,
+                numBins);
 
         juce::FloatVectorOperations::multiply(
             synthesisFrequency.data(),
