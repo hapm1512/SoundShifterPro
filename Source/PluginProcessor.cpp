@@ -416,6 +416,28 @@ void SoundShifterProAudioProcessor::updateMeters(
     }
 }
 
+void SoundShifterProAudioProcessor::beginMidiLearn(
+    MidiLearnTarget target) noexcept
+{
+    midiLearnTarget.store(target);
+}
+
+void SoundShifterProAudioProcessor::cancelMidiLearn() noexcept
+{
+    midiLearnTarget.store(MidiLearnTarget::none);
+}
+
+bool SoundShifterProAudioProcessor::isMidiLearning() const noexcept
+{
+    return midiLearnTarget.load() != MidiLearnTarget::none;
+}
+
+SoundShifterProAudioProcessor::MidiLearnTarget
+SoundShifterProAudioProcessor::getMidiLearnTarget() const noexcept
+{
+    return midiLearnTarget.load();
+}
+
 void SoundShifterProAudioProcessor::handleMidiControl(
     const juce::MidiBuffer& midiMessages)
 {
@@ -432,6 +454,48 @@ void SoundShifterProAudioProcessor::handleMidiControl(
                     cc,
                     static_cast<int>(ccPressed.size())))
             {
+                continue;
+            }
+
+            const auto learnTarget = midiLearnTarget.load();
+
+            if (learnTarget != MidiLearnTarget::none)
+            {
+                const char* parameterId = nullptr;
+
+                switch (learnTarget)
+                {
+                    case MidiLearnTarget::pitchDown:
+                        parameterId = ParameterIDs::midiPitchDownCc;
+                        break;
+
+                    case MidiLearnTarget::pitchUp:
+                        parameterId = ParameterIDs::midiPitchUpCc;
+                        break;
+
+                    case MidiLearnTarget::pitchReset:
+                        parameterId = ParameterIDs::midiPitchResetCc;
+                        break;
+
+                    case MidiLearnTarget::none:
+                    default:
+                        break;
+                }
+
+                if (parameterId != nullptr)
+                {
+                    if (auto* parameter = apvts.getParameter(parameterId))
+                    {
+                        parameter->beginChangeGesture();
+                        parameter->setValueNotifyingHost(
+                            parameter->convertTo0to1(
+                                static_cast<float>(cc)));
+                        parameter->endChangeGesture();
+                    }
+                }
+
+                midiLearnTarget.store(MidiLearnTarget::none);
+                ccPressed[static_cast<size_t>(cc)] = pressed;
                 continue;
             }
 

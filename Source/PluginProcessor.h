@@ -6,6 +6,14 @@
 class SoundShifterProAudioProcessor final : public juce::AudioProcessor
 {
 public:
+    enum class MidiLearnTarget
+    {
+        none,
+        pitchDown,
+        pitchUp,
+        pitchReset
+    };
+
     SoundShifterProAudioProcessor();
     ~SoundShifterProAudioProcessor() override = default;
 
@@ -40,6 +48,11 @@ public:
     float getOutputLeftDb() const noexcept { return outputLeftDb.load(); }
     float getOutputRightDb() const noexcept { return outputRightDb.load(); }
     double getCurrentSampleRateHz() const noexcept { return currentSampleRate.load(); }
+
+    void beginMidiLearn(MidiLearnTarget target) noexcept;
+    void cancelMidiLearn() noexcept;
+    [[nodiscard]] bool isMidiLearning() const noexcept;
+    [[nodiscard]] MidiLearnTarget getMidiLearnTarget() const noexcept;
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -81,6 +94,7 @@ private:
     int dryDelayWritePosition = 0;
 
     std::array<bool, 128> ccPressed {};
+    std::atomic<MidiLearnTarget> midiLearnTarget { MidiLearnTarget::none };
 
     std::atomic<float> inputLeftDb { -100.0f };
     std::atomic<float> inputRightDb { -100.0f };
