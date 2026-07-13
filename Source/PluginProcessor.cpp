@@ -230,17 +230,25 @@ void SoundShifterProAudioProcessor::applyDryWetMix(
     const auto effectiveEnd =
         juce::jlimit(0.0f, 1.0f, mixEnd * bypassEnd);
 
-    const auto dryStart =
-        std::cos(effectiveStart * juce::MathConstants<float>::halfPi);
+    if (effectiveStart <= 0.0001f && effectiveEnd <= 0.0001f)
+    {
+        wetBuffer.makeCopyOf(delayedDryBlock, true);
+        return;
+    }
 
-    const auto dryEnd =
-        std::cos(effectiveEnd * juce::MathConstants<float>::halfPi);
+    if (effectiveStart >= 0.9999f && effectiveEnd >= 0.9999f)
+        return;
 
-    const auto wetStart =
-        std::sin(effectiveStart * juce::MathConstants<float>::halfPi);
+    const auto startAngle =
+        effectiveStart * juce::MathConstants<float>::halfPi;
+    const auto endAngle =
+        effectiveEnd * juce::MathConstants<float>::halfPi;
 
-    const auto wetEnd =
-        std::sin(effectiveEnd * juce::MathConstants<float>::halfPi);
+    const auto dryStart = std::cos(startAngle);
+    const auto dryEnd = std::cos(endAngle);
+
+    const auto wetStart = std::sin(startAngle);
+    const auto wetEnd = std::sin(endAngle);
 
     const auto channels = juce::jmin(
         wetBuffer.getNumChannels(),
