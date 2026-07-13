@@ -17,6 +17,10 @@ public:
     void setFineCents(float newCents) noexcept;
     void setHighQuality(bool shouldUseHighQuality) noexcept;
 
+    [[nodiscard]] float getPitchSemitones() const noexcept { return pitchSemitones; }
+    [[nodiscard]] float getFineCents() const noexcept { return fineCents; }
+    [[nodiscard]] bool isHighQuality() const noexcept { return highQuality; }
+
     void process(juce::AudioBuffer<float>& buffer) noexcept;
 
     [[nodiscard]] int getLatencySamples() const noexcept;

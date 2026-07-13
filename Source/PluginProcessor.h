@@ -44,19 +44,41 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
+    void cacheParameterPointers() noexcept;
     void handleMidiControl(const juce::MidiBuffer& midiMessages);
     void changePitchBySemitones(float amount);
     void setPitchFromMidi(float semitones);
+
     void prepareDryDelay(int channels, int maximumBlockSize);
     void createDelayedDry(const juce::AudioBuffer<float>& input, int numSamples);
+    void applyDryWetMix(juce::AudioBuffer<float>& wetBuffer,
+                        int numSamples,
+                        float requestedMix,
+                        bool bypassed);
+    void applyOutputGain(juce::AudioBuffer<float>& buffer, int numSamples);
+    void updateMeters(const juce::AudioBuffer<float>& buffer,
+                      bool inputMeters) noexcept;
+
     juce::AudioProcessorValueTreeState apvts;
     PitchShiftEngine pitchShiftEngine;
 
+    std::atomic<float>* pitchParameter = nullptr;
+    std::atomic<float>* fineParameter = nullptr;
+    std::atomic<float>* mixParameter = nullptr;
+    std::atomic<float>* outputParameter = nullptr;
+    std::atomic<float>* bypassParameter = nullptr;
+    std::atomic<float>* hqParameter = nullptr;
+
     juce::LinearSmoothedValue<float> outputGainLinear;
+    juce::LinearSmoothedValue<float> mixSmoothed;
+    juce::LinearSmoothedValue<float> bypassWetSmoothed;
+
     juce::AudioBuffer<float> dryDelayBuffer;
     juce::AudioBuffer<float> delayedDryBlock;
     int dryDelayWritePosition = 0;
+
     std::array<bool, 128> ccPressed {};
+
     std::atomic<float> inputLeftDb { -100.0f };
     std::atomic<float> inputRightDb { -100.0f };
     std::atomic<float> outputLeftDb { -100.0f };

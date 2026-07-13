@@ -17,6 +17,7 @@ SoundShifterProAudioProcessor::SoundShifterProAudioProcessor()
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMETERS", createParameterLayout())
 {
+    cacheParameterPointers();
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout
@@ -65,28 +66,75 @@ SoundShifterProAudioProcessor::createParameterLayout()
     return { parameters.begin(), parameters.end() };
 }
 
-void SoundShifterProAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+void SoundShifterProAudioProcessor::cacheParameterPointers() noexcept
+{
+    pitchParameter = apvts.getRawParameterValue(ParameterIDs::pitch);
+    fineParameter = apvts.getRawParameterValue(ParameterIDs::fine);
+    mixParameter = apvts.getRawParameterValue(ParameterIDs::mix);
+    outputParameter = apvts.getRawParameterValue(ParameterIDs::output);
+    bypassParameter = apvts.getRawParameterValue(ParameterIDs::bypass);
+    hqParameter = apvts.getRawParameterValue(ParameterIDs::hq);
+
+    jassert(pitchParameter != nullptr);
+    jassert(fineParameter != nullptr);
+    jassert(mixParameter != nullptr);
+    jassert(outputParameter != nullptr);
+    jassert(bypassParameter != nullptr);
+    jassert(hqParameter != nullptr);
+}
+
+void SoundShifterProAudioProcessor::prepareToPlay(double sampleRate,
+                                                  int samplesPerBlock)
 {
     const juce::dsp::ProcessSpec spec {
         sampleRate,
         static_cast<juce::uint32>(samplesPerBlock),
-        static_cast<juce::uint32>(juce::jmax(1, getTotalNumOutputChannels()))
+        static_cast<juce::uint32>(
+            juce::jmax(1, getTotalNumOutputChannels()))
     };
 
     currentSampleRate.store(sampleRate);
+
     pitchShiftEngine.prepare(spec);
-    setLatencySamples(pitchShiftEngine.getLatencySamples());
-    prepareDryDelay(static_cast<int>(spec.numChannels), samplesPerBlock);
+
+    const auto latency = pitchShiftEngine.getLatencySamples();
+    setLatencySamples(latency);
+
+    prepareDryDelay(
+        static_cast<int>(spec.numChannels),
+        samplesPerBlock);
+
     outputGainLinear.reset(sampleRate, 0.02);
-    outputGainLinear.setCurrentAndTargetValue(1.0f);
+    mixSmoothed.reset(sampleRate, 0.02);
+    bypassWetSmoothed.reset(sampleRate, 0.01);
+
+    const auto initialOutput = outputParameter != nullptr
+        ? juce::Decibels::decibelsToGain(outputParameter->load())
+        : 1.0f;
+
+    const auto initialMix = mixParameter != nullptr
+        ? juce::jlimit(0.0f, 1.0f, mixParameter->load() * 0.01f)
+        : 1.0f;
+
+    const auto initialBypassWet = bypassParameter != nullptr
+        && bypassParameter->load() > 0.5f
+            ? 0.0f
+            : 1.0f;
+
+    outputGainLinear.setCurrentAndTargetValue(initialOutput);
+    mixSmoothed.setCurrentAndTargetValue(initialMix);
+    bypassWetSmoothed.setCurrentAndTargetValue(initialBypassWet);
 }
 
 void SoundShifterProAudioProcessor::releaseResources()
 {
     pitchShiftEngine.reset();
+    dryDelayBuffer.clear();
+    delayedDryBlock.clear();
 }
 
-bool SoundShifterProAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
+bool SoundShifterProAudioProcessor::isBusesLayoutSupported(
+    const BusesLayout& layouts) const
 {
     const auto input = layouts.getMainInputChannelSet();
     const auto output = layouts.getMainOutputChannelSet();
@@ -98,78 +146,184 @@ bool SoundShifterProAudioProcessor::isBusesLayoutSupported(const BusesLayout& la
         || output == juce::AudioChannelSet::stereo();
 }
 
-void SoundShifterProAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
-                                                 juce::MidiBuffer& midiMessages)
+void SoundShifterProAudioProcessor::processBlock(
+    juce::AudioBuffer<float>& buffer,
+    juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
+
     handleMidiControl(midiMessages);
 
-    for (auto channel = getTotalNumInputChannels(); channel < getTotalNumOutputChannels(); ++channel)
-        buffer.clear(channel, 0, buffer.getNumSamples());
+    const auto numSamples = buffer.getNumSamples();
 
-    const auto inputLeftMagnitude = buffer.getNumChannels() > 0
-                                      ? buffer.getMagnitude(0, 0, buffer.getNumSamples())
-                                      : 0.0f;
-    const auto inputRightMagnitude = buffer.getNumChannels() > 1
-                                       ? buffer.getMagnitude(1, 0, buffer.getNumSamples())
-                                       : inputLeftMagnitude;
-    inputLeftDb.store(juce::Decibels::gainToDecibels(inputLeftMagnitude, -100.0f));
-    inputRightDb.store(juce::Decibels::gainToDecibels(inputRightMagnitude, -100.0f));
-
-    const auto bypassed = apvts.getRawParameterValue(ParameterIDs::bypass)->load() > 0.5f;
-    createDelayedDry(buffer, buffer.getNumSamples());
-
-    if (!bypassed)
+    for (auto channel = getTotalNumInputChannels();
+         channel < getTotalNumOutputChannels();
+         ++channel)
     {
-        const auto pitch = apvts.getRawParameterValue(ParameterIDs::pitch)->load();
-        const auto fine = apvts.getRawParameterValue(ParameterIDs::fine)->load();
-        const auto mix = juce::jlimit(0.0f, 1.0f,
-            apvts.getRawParameterValue(ParameterIDs::mix)->load() * 0.01f);
+        buffer.clear(channel, 0, numSamples);
+    }
 
-        pitchShiftEngine.setPitchSemitones(pitch);
-        pitchShiftEngine.setFineCents(fine);
-        const auto highQuality = apvts.getRawParameterValue(ParameterIDs::hq)->load() > 0.5f;
-        pitchShiftEngine.setHighQuality(highQuality);
+    updateMeters(buffer, true);
+    createDelayedDry(buffer, numSamples);
+
+    const auto pitch = pitchParameter != nullptr
+        ? pitchParameter->load()
+        : 0.0f;
+
+    const auto fine = fineParameter != nullptr
+        ? fineParameter->load()
+        : 0.0f;
+
+    const auto requestedMix = mixParameter != nullptr
+        ? juce::jlimit(0.0f, 1.0f, mixParameter->load() * 0.01f)
+        : 1.0f;
+
+    const auto bypassed = bypassParameter != nullptr
+        && bypassParameter->load() > 0.5f;
+
+    const auto highQuality = hqParameter == nullptr
+        || hqParameter->load() > 0.5f;
+
+    pitchShiftEngine.setPitchSemitones(pitch);
+    pitchShiftEngine.setFineCents(fine);
+    pitchShiftEngine.setHighQuality(highQuality);
+
+    bypassWetSmoothed.setTargetValue(bypassed ? 0.0f : 1.0f);
+
+    const auto shouldProcessWet =
+        !bypassed
+        || bypassWetSmoothed.isSmoothing()
+        || bypassWetSmoothed.getCurrentValue() > 0.0001f;
+
+    if (shouldProcessWet)
         pitchShiftEngine.process(buffer);
 
-        const auto dryGain = std::cos(mix * juce::MathConstants<float>::halfPi);
-        const auto wetGain = std::sin(mix * juce::MathConstants<float>::halfPi);
+    applyDryWetMix(
+        buffer,
+        numSamples,
+        requestedMix,
+        bypassed);
 
-        for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
-        {
-            buffer.applyGain(channel, 0, buffer.getNumSamples(), wetGain);
-            buffer.addFrom(channel, 0, delayedDryBlock, channel, 0,
-                           buffer.getNumSamples(), dryGain);
-        }
+    applyOutputGain(buffer, numSamples);
+    updateMeters(buffer, false);
+}
+
+void SoundShifterProAudioProcessor::applyDryWetMix(
+    juce::AudioBuffer<float>& wetBuffer,
+    int numSamples,
+    float requestedMix,
+    bool bypassed)
+{
+    juce::ignoreUnused(bypassed);
+
+    mixSmoothed.setTargetValue(requestedMix);
+
+    const auto mixStart = mixSmoothed.getCurrentValue();
+    const auto bypassStart = bypassWetSmoothed.getCurrentValue();
+
+    const auto mixEnd = mixSmoothed.skip(numSamples);
+    const auto bypassEnd = bypassWetSmoothed.skip(numSamples);
+
+    const auto effectiveStart =
+        juce::jlimit(0.0f, 1.0f, mixStart * bypassStart);
+
+    const auto effectiveEnd =
+        juce::jlimit(0.0f, 1.0f, mixEnd * bypassEnd);
+
+    const auto dryStart =
+        std::cos(effectiveStart * juce::MathConstants<float>::halfPi);
+
+    const auto dryEnd =
+        std::cos(effectiveEnd * juce::MathConstants<float>::halfPi);
+
+    const auto wetStart =
+        std::sin(effectiveStart * juce::MathConstants<float>::halfPi);
+
+    const auto wetEnd =
+        std::sin(effectiveEnd * juce::MathConstants<float>::halfPi);
+
+    const auto channels = juce::jmin(
+        wetBuffer.getNumChannels(),
+        delayedDryBlock.getNumChannels());
+
+    for (int channel = 0; channel < channels; ++channel)
+    {
+        wetBuffer.applyGainRamp(
+            channel,
+            0,
+            numSamples,
+            wetStart,
+            wetEnd);
+
+        wetBuffer.addFromWithRamp(
+            channel,
+            0,
+            delayedDryBlock.getReadPointer(channel),
+            numSamples,
+            dryStart,
+            dryEnd);
+    }
+}
+
+void SoundShifterProAudioProcessor::applyOutputGain(
+    juce::AudioBuffer<float>& buffer,
+    int numSamples)
+{
+    const auto outputDb = outputParameter != nullptr
+        ? outputParameter->load()
+        : 0.0f;
+
+    outputGainLinear.setTargetValue(
+        juce::Decibels::decibelsToGain(outputDb));
+
+    const auto startGain = outputGainLinear.getCurrentValue();
+    const auto endGain = outputGainLinear.skip(numSamples);
+
+    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+    {
+        buffer.applyGainRamp(
+            channel,
+            0,
+            numSamples,
+            startGain,
+            endGain);
+    }
+}
+
+void SoundShifterProAudioProcessor::updateMeters(
+    const juce::AudioBuffer<float>& buffer,
+    bool inputMeters) noexcept
+{
+    const auto numSamples = buffer.getNumSamples();
+
+    const auto leftMagnitude = buffer.getNumChannels() > 0
+        ? buffer.getMagnitude(0, 0, numSamples)
+        : 0.0f;
+
+    const auto rightMagnitude = buffer.getNumChannels() > 1
+        ? buffer.getMagnitude(1, 0, numSamples)
+        : leftMagnitude;
+
+    const auto leftDb =
+        juce::Decibels::gainToDecibels(leftMagnitude, -100.0f);
+
+    const auto rightDb =
+        juce::Decibels::gainToDecibels(rightMagnitude, -100.0f);
+
+    if (inputMeters)
+    {
+        inputLeftDb.store(leftDb);
+        inputRightDb.store(rightDb);
     }
     else
     {
-        for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
-            buffer.copyFrom(channel, 0, delayedDryBlock, channel, 0, buffer.getNumSamples());
+        outputLeftDb.store(leftDb);
+        outputRightDb.store(rightDb);
     }
-
-    const auto outputDb = apvts.getRawParameterValue(ParameterIDs::output)->load();
-    outputGainLinear.setTargetValue(juce::Decibels::decibelsToGain(outputDb));
-
-    for (auto sample = 0; sample < buffer.getNumSamples(); ++sample)
-    {
-        const auto gain = outputGainLinear.getNextValue();
-        for (auto channel = 0; channel < buffer.getNumChannels(); ++channel)
-            buffer.setSample(channel, sample, buffer.getSample(channel, sample) * gain);
-    }
-
-    const auto outputLeftMagnitude = buffer.getNumChannels() > 0
-                                       ? buffer.getMagnitude(0, 0, buffer.getNumSamples())
-                                       : 0.0f;
-    const auto outputRightMagnitude = buffer.getNumChannels() > 1
-                                        ? buffer.getMagnitude(1, 0, buffer.getNumSamples())
-                                        : outputLeftMagnitude;
-    outputLeftDb.store(juce::Decibels::gainToDecibels(outputLeftMagnitude, -100.0f));
-    outputRightDb.store(juce::Decibels::gainToDecibels(outputRightMagnitude, -100.0f));
 }
 
-
-void SoundShifterProAudioProcessor::handleMidiControl(const juce::MidiBuffer& midiMessages)
+void SoundShifterProAudioProcessor::handleMidiControl(
+    const juce::MidiBuffer& midiMessages)
 {
     for (const auto metadata : midiMessages)
     {
@@ -179,29 +333,49 @@ void SoundShifterProAudioProcessor::handleMidiControl(const juce::MidiBuffer& mi
         {
             const auto cc = message.getControllerNumber();
             const auto pressed = message.getControllerValue() >= 64;
-            const auto wasPressed = ccPressed[static_cast<size_t>(cc)];
+
+            if (!juce::isPositiveAndBelow(
+                    cc,
+                    static_cast<int>(ccPressed.size())))
+            {
+                continue;
+            }
+
+            const auto wasPressed =
+                ccPressed[static_cast<size_t>(cc)];
+
             ccPressed[static_cast<size_t>(cc)] = pressed;
 
             if (pressed && !wasPressed)
             {
-                if (cc == 30) changePitchBySemitones(-1.0f);
-                if (cc == 31) changePitchBySemitones(1.0f);
-                if (cc == 32) setPitchFromMidi(0.0f);
+                if (cc == 30)
+                    changePitchBySemitones(-1.0f);
+                else if (cc == 31)
+                    changePitchBySemitones(1.0f);
+                else if (cc == 32)
+                    setPitchFromMidi(0.0f);
             }
         }
         else if (message.isNoteOn())
         {
             const auto note = message.getNoteNumber();
-            if (note == 60) changePitchBySemitones(-1.0f);
-            if (note == 62) changePitchBySemitones(1.0f);
-            if (note == 64) setPitchFromMidi(0.0f);
+
+            if (note == 60)
+                changePitchBySemitones(-1.0f);
+            else if (note == 62)
+                changePitchBySemitones(1.0f);
+            else if (note == 64)
+                setPitchFromMidi(0.0f);
         }
     }
 }
 
 void SoundShifterProAudioProcessor::changePitchBySemitones(float amount)
 {
-    const auto current = apvts.getRawParameterValue(ParameterIDs::pitch)->load();
+    const auto current = pitchParameter != nullptr
+        ? pitchParameter->load()
+        : 0.0f;
+
     setPitchFromMidi(current + amount);
 }
 
@@ -210,66 +384,109 @@ void SoundShifterProAudioProcessor::setPitchFromMidi(float semitones)
     if (auto* parameter = apvts.getParameter(ParameterIDs::pitch))
     {
         const auto value = juce::jlimit(-12.0f, 12.0f, semitones);
-        parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+
+        parameter->beginChangeGesture();
+        parameter->setValueNotifyingHost(
+            parameter->convertTo0to1(value));
+        parameter->endChangeGesture();
     }
 }
 
-void SoundShifterProAudioProcessor::prepareDryDelay(int channels, int maximumBlockSize)
+void SoundShifterProAudioProcessor::prepareDryDelay(
+    int channels,
+    int maximumBlockSize)
 {
-    const auto delaySamples = juce::jmax(1, getLatencySamples());
-    dryDelayBuffer.setSize(juce::jmax(1, channels),
-                           delaySamples + juce::jmax(1, maximumBlockSize) + 1,
-                           false, true, false);
-    delayedDryBlock.setSize(juce::jmax(1, channels),
-                            juce::jmax(1, maximumBlockSize),
-                            false, true, false);
+    const auto delaySamples =
+        juce::jmax(1, getLatencySamples());
+
+    const auto safeChannels =
+        juce::jmax(1, channels);
+
+    const auto safeBlockSize =
+        juce::jmax(1, maximumBlockSize);
+
+    dryDelayBuffer.setSize(
+        safeChannels,
+        delaySamples + safeBlockSize + 1,
+        false,
+        true,
+        false);
+
+    delayedDryBlock.setSize(
+        safeChannels,
+        safeBlockSize,
+        false,
+        true,
+        false);
+
     dryDelayBuffer.clear();
     delayedDryBlock.clear();
     dryDelayWritePosition = 0;
 }
 
-void SoundShifterProAudioProcessor::createDelayedDry(const juce::AudioBuffer<float>& input,
-                                                      int numSamples)
+void SoundShifterProAudioProcessor::createDelayedDry(
+    const juce::AudioBuffer<float>& input,
+    int numSamples)
 {
     const auto delaySamples = getLatencySamples();
     const auto ringSize = dryDelayBuffer.getNumSamples();
-    const auto channels = juce::jmin(input.getNumChannels(), dryDelayBuffer.getNumChannels());
+
+    const auto channels = juce::jmin(
+        input.getNumChannels(),
+        dryDelayBuffer.getNumChannels());
 
     jassert(numSamples <= delayedDryBlock.getNumSamples());
+
     delayedDryBlock.clear();
 
-    for (int sample = 0; sample < numSamples; ++sample)
+    for (int channel = 0; channel < channels; ++channel)
     {
-        auto readPosition = dryDelayWritePosition - delaySamples;
-        if (readPosition < 0)
-            readPosition += ringSize;
+        const auto* inputData = input.getReadPointer(channel);
+        auto* delayData = dryDelayBuffer.getWritePointer(channel);
+        auto* dryData = delayedDryBlock.getWritePointer(channel);
 
-        for (int channel = 0; channel < channels; ++channel)
+        auto writePosition = dryDelayWritePosition;
+
+        for (int sample = 0; sample < numSamples; ++sample)
         {
-            delayedDryBlock.setSample(channel, sample,
-                                      dryDelayBuffer.getSample(channel, readPosition));
-            dryDelayBuffer.setSample(channel, dryDelayWritePosition,
-                                     input.getSample(channel, sample));
-        }
+            auto readPosition = writePosition - delaySamples;
 
-        dryDelayWritePosition = (dryDelayWritePosition + 1) % ringSize;
+            if (readPosition < 0)
+                readPosition += ringSize;
+
+            dryData[sample] = delayData[readPosition];
+            delayData[writePosition] = inputData[sample];
+
+            if (++writePosition >= ringSize)
+                writePosition = 0;
+        }
     }
+
+    dryDelayWritePosition += numSamples;
+    dryDelayWritePosition %= ringSize;
 }
 
-void SoundShifterProAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
+void SoundShifterProAudioProcessor::getStateInformation(
+    juce::MemoryBlock& destData)
 {
     if (auto xml = apvts.copyState().createXml())
         copyXmlToBinary(*xml, destData);
 }
 
-void SoundShifterProAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
+void SoundShifterProAudioProcessor::setStateInformation(
+    const void* data,
+    int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary(data, sizeInBytes))
+    {
         if (xml->hasTagName(apvts.state.getType()))
-            apvts.replaceState(juce::ValueTree::fromXml(*xml));
+            apvts.replaceState(
+                juce::ValueTree::fromXml(*xml));
+    }
 }
 
-juce::AudioProcessorEditor* SoundShifterProAudioProcessor::createEditor()
+juce::AudioProcessorEditor*
+SoundShifterProAudioProcessor::createEditor()
 {
     return new SoundShifterProAudioProcessorEditor(*this);
 }

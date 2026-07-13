@@ -48,17 +48,24 @@ void PitchShiftEngine::reset() noexcept
 
 void PitchShiftEngine::setPitchSemitones(float newSemitones) noexcept
 {
-    pitchSemitones = juce::jlimit(-12.0f, 12.0f, newSemitones);
+    const auto clamped = juce::jlimit(-12.0f, 12.0f, newSemitones);
+
+    if (pitchSemitones != clamped)
+        pitchSemitones = clamped;
 }
 
 void PitchShiftEngine::setFineCents(float newCents) noexcept
 {
-    fineCents = juce::jlimit(-100.0f, 100.0f, newCents);
+    const auto clamped = juce::jlimit(-100.0f, 100.0f, newCents);
+
+    if (fineCents != clamped)
+        fineCents = clamped;
 }
 
 void PitchShiftEngine::setHighQuality(bool shouldUseHighQuality) noexcept
 {
-    highQuality = shouldUseHighQuality;
+    if (highQuality != shouldUseHighQuality)
+        highQuality = shouldUseHighQuality;
 }
 
 void PitchShiftEngine::process(juce::AudioBuffer<float>& buffer) noexcept
