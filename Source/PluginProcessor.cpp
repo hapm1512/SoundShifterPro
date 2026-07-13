@@ -296,6 +296,8 @@ void SoundShifterProAudioProcessor::applyOutputGain(
         && std::abs(endGain - 1.0f) < 0.0005f)
         return;
 
+    constexpr float safetyThreshold = 0.965f;
+
     for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
     {
         buffer.applyGainRamp(
@@ -304,6 +306,16 @@ void SoundShifterProAudioProcessor::applyOutputGain(
             numSamples,
             startGain,
             endGain);
+
+        auto* samples = buffer.getWritePointer(channel);
+
+        for (int i = 0; i < numSamples; ++i)
+        {
+            const float x = samples[i];
+
+            if (std::abs(x) > safetyThreshold)
+                samples[i] = std::tanh(x);
+        }
     }
 }
 
