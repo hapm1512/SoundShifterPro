@@ -36,6 +36,7 @@ void PitchShiftEngine::reset() noexcept
                   outputFrames[static_cast<size_t>(channel)].end(), 0.0f);
     }
 
+    linkedTransientStrength = 0.0f;
     overlapAdd.reset();
     samplesUntilFrame = SoundShifterDSP::Config::fftSize;
 }
@@ -91,6 +92,11 @@ void PitchShiftEngine::processAvailableFrames() noexcept
     const auto totalSemitones = pitchSemitones + fineCents * 0.01f;
     const auto pitchRatio = std::pow(2.0f, totalSemitones / 12.0f);
 
+    std::array<bool, SoundShifterDSP::Config::maxChannels> frameReady {};
+    linkedTransientStrength = 0.0f;
+
+    // Analyse every channel first. Linking by the strongest channel prevents
+    // left/right attacks from receiving different phase-reset amounts.
     for (int channel = 0; channel < activeChannels; ++channel)
     {
         auto& ring = inputRings[static_cast<size_t>(channel)];
@@ -98,9 +104,8 @@ void PitchShiftEngine::processAvailableFrames() noexcept
             continue;
 
         auto& input = inputFrames[static_cast<size_t>(channel)];
-        auto& output = outputFrames[static_cast<size_t>(channel)];
-
         ring.copyOldestToNewest(input.data(), SoundShifterDSP::Config::fftSize);
+        frameReady[static_cast<size_t>(channel)] = true;
 
         if constexpr (SoundShifterDSP::Config::enableTransient)
         {
@@ -113,12 +118,26 @@ void PitchShiftEngine::processAvailableFrames() noexcept
             transientStrength[static_cast<size_t>(channel)] = 0.0f;
         }
 
-        fftProcessors[static_cast<size_t>(channel)].processPitchFrame(
-            input.data(), output.data(), pitchRatio);
-        overlapAdd.addFrame(channel, output.data());
+        linkedTransientStrength = juce::jmax(
+            linkedTransientStrength,
+            transientStrength[static_cast<size_t>(channel)]);
     }
 
-    // Epic 3D.2 only analyses transients. Epic 3D.3 will use these
-    // values to adapt phase locking and transient reconstruction.
-    juce::ignoreUnused(highQuality, transientStrength);
+    for (int channel = 0; channel < activeChannels; ++channel)
+    {
+        if (!frameReady[static_cast<size_t>(channel)])
+            continue;
+
+        auto& input = inputFrames[static_cast<size_t>(channel)];
+        auto& output = outputFrames[static_cast<size_t>(channel)];
+
+        fftProcessors[static_cast<size_t>(channel)].processPitchFrame(
+            input.data(),
+            output.data(),
+            pitchRatio,
+            linkedTransientStrength,
+            highQuality);
+
+        overlapAdd.addFrame(channel, output.data());
+    }
 }

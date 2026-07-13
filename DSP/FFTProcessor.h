@@ -50,13 +50,22 @@ public:
         identityPhaseLock.reset();
     }
 
-    void processPitchFrame(const float* input, float* output, float pitchRatio) noexcept
+    void processPitchFrame(const float* input,
+                           float* output,
+                           float pitchRatio,
+                           float transientAmount,
+                           bool highQuality) noexcept
     {
         jassert(fft != nullptr && input != nullptr && output != nullptr);
 
         constexpr auto fftSize = SoundShifterDSP::Config::fftSize;
         constexpr auto hopSize = SoundShifterDSP::Config::hopSize;
         const auto safeRatio = juce::jlimit(0.5f, 2.0f, pitchRatio);
+        const auto safeTransient = juce::jlimit(0.0f, 1.0f, transientAmount);
+        const auto phaseResetMaximum = highQuality
+            ? SoundShifterDSP::Config::transientPhaseResetHQ
+            : SoundShifterDSP::Config::transientPhaseResetFast;
+        const auto phaseResetAmount = safeTransient * phaseResetMaximum;
         const auto frequencyPerBin = static_cast<float>(sampleRate / fftSize);
         const auto expectedPhase = juce::MathConstants<float>::twoPi
                                  * static_cast<float>(hopSize)
@@ -137,11 +146,31 @@ public:
         }
 
         identityPhaseLock.apply(outputPhase.data(),
-                        mappedAnalysisPhase.data(),
-                        synthesisMagnitude.data(),
-                        peakDetector.getPeakIndices(),
-                        peakDetector.getPeakCount(),
-                        safeRatio);
+                                mappedAnalysisPhase.data(),
+                                synthesisMagnitude.data(),
+                                peakDetector.getPeakIndices(),
+                                peakDetector.getPeakCount(),
+                                safeRatio);
+
+        // Reset part of the synthesis phase on attacks. The shortest wrapped
+        // phase path avoids discontinuities while restoring transient focus.
+        if (phaseResetAmount > 0.0f)
+        {
+            for (int bin = 0; bin < numBins; ++bin)
+            {
+                if (synthesisMagnitude[static_cast<size_t>(bin)] <= 1.0e-12f)
+                    continue;
+
+                const auto currentPhase = outputPhase[static_cast<size_t>(bin)];
+                const auto targetPhase = mappedAnalysisPhase[static_cast<size_t>(bin)];
+                const auto wrappedDelta = std::remainder(
+                    targetPhase - currentPhase,
+                    juce::MathConstants<float>::twoPi);
+
+                outputPhase[static_cast<size_t>(bin)] =
+                    currentPhase + wrappedDelta * phaseResetAmount;
+            }
+        }
 
         for (int bin = 0; bin < numBins; ++bin)
         {

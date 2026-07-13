@@ -49,6 +49,8 @@ private:
                SoundShifterDSP::Config::maxChannels>
         transientStrength {};
 
+    float linkedTransientStrength = 0.0f;
+
     std::array<std::vector<float>,
                SoundShifterDSP::Config::maxChannels>
         inputFrames;

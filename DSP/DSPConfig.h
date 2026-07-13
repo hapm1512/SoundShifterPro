@@ -24,5 +24,7 @@ namespace SoundShifterDSP
         static constexpr float transientEnergySmoothing = 0.12f;
         static constexpr float transientEnergyFloor = 1.0e-9f;
         static constexpr float transientBlend = 0.35f;
+        static constexpr float transientPhaseResetHQ = 0.72f;
+        static constexpr float transientPhaseResetFast = 0.48f;
     };
 }
