@@ -20,13 +20,18 @@ private:
     static float unwrapNear(float phase, float reference) noexcept;
 
     int findPreviousPeak(int targetBin) const noexcept;
+    float calculateTrackingBlend(int currentPeak,
+                                 int previousIndex,
+                                 float currentMagnitude) const noexcept;
 
     std::vector<int> targetPeaks;
     std::vector<int> peakOwners;
     std::vector<int> previousPeakBins;
     std::vector<float> previousPeakPhases;
+    std::vector<float> previousPeakMagnitudes;
     std::vector<int> currentPeakBins;
     std::vector<float> currentPeakPhases;
+    std::vector<float> currentPeakMagnitudes;
 
     int previousPeakCount = 0;
     int currentPeakCount = 0;

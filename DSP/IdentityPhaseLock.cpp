@@ -9,8 +9,10 @@ void IdentityPhaseLock::prepare(int newNumBins, int newMaxPeaks)
     peakOwners.assign(static_cast<size_t>(numBins), -1);
     previousPeakBins.assign(static_cast<size_t>(maxPeaks), 0);
     previousPeakPhases.assign(static_cast<size_t>(maxPeaks), 0.0f);
+    previousPeakMagnitudes.assign(static_cast<size_t>(maxPeaks), 0.0f);
     currentPeakBins.assign(static_cast<size_t>(maxPeaks), 0);
     currentPeakPhases.assign(static_cast<size_t>(maxPeaks), 0.0f);
+    currentPeakMagnitudes.assign(static_cast<size_t>(maxPeaks), 0.0f);
     reset();
 }
 
@@ -20,8 +22,10 @@ void IdentityPhaseLock::reset() noexcept
     std::fill(peakOwners.begin(), peakOwners.end(), -1);
     std::fill(previousPeakBins.begin(), previousPeakBins.end(), 0);
     std::fill(previousPeakPhases.begin(), previousPeakPhases.end(), 0.0f);
+    std::fill(previousPeakMagnitudes.begin(), previousPeakMagnitudes.end(), 0.0f);
     std::fill(currentPeakBins.begin(), currentPeakBins.end(), 0);
     std::fill(currentPeakPhases.begin(), currentPeakPhases.end(), 0.0f);
+    std::fill(currentPeakMagnitudes.begin(), currentPeakMagnitudes.end(), 0.0f);
     previousPeakCount = 0;
     currentPeakCount = 0;
 }
@@ -44,17 +48,22 @@ void IdentityPhaseLock::apply(float* synthesisPhase,
     for (int index = 0; index < sourcePeakCount && currentPeakCount < maxPeaks; ++index)
     {
         const auto sourcePeak = sourcePeakIndices[index];
-        const auto targetPeak = juce::jlimit(0, numBins - 1,
-                                             juce::roundToInt(static_cast<float>(sourcePeak)
-                                                              * pitchRatio));
+        const auto targetPeak = juce::jlimit(
+            0,
+            numBins - 1,
+            juce::roundToInt(static_cast<float>(sourcePeak) * pitchRatio));
 
         if (targetPeak == previousTargetPeak)
             continue;
 
-        if (synthesisMagnitude[targetPeak] <= 1.0e-12f)
+        const auto peakMagnitude = synthesisMagnitude[targetPeak];
+
+        if (peakMagnitude <= 1.0e-12f)
             continue;
 
-        targetPeaks[static_cast<size_t>(currentPeakCount++)] = targetPeak;
+        targetPeaks[static_cast<size_t>(currentPeakCount)] = targetPeak;
+        currentPeakMagnitudes[static_cast<size_t>(currentPeakCount)] = peakMagnitude;
+        ++currentPeakCount;
         previousTargetPeak = targetPeak;
     }
 
@@ -69,9 +78,11 @@ void IdentityPhaseLock::apply(float* synthesisPhase,
     for (int peakIndex = 0; peakIndex < currentPeakCount; ++peakIndex)
     {
         const auto peak = targetPeaks[static_cast<size_t>(peakIndex)];
+
         const auto left = peakIndex == 0
             ? 0
             : (targetPeaks[static_cast<size_t>(peakIndex - 1)] + peak) / 2 + 1;
+
         const auto right = peakIndex == currentPeakCount - 1
             ? numBins - 1
             : (peak + targetPeaks[static_cast<size_t>(peakIndex + 1)]) / 2;
@@ -83,12 +94,32 @@ void IdentityPhaseLock::apply(float* synthesisPhase,
     for (int peakIndex = 0; peakIndex < currentPeakCount; ++peakIndex)
     {
         const auto peak = targetPeaks[static_cast<size_t>(peakIndex)];
+        const auto magnitude = currentPeakMagnitudes[static_cast<size_t>(peakIndex)];
         auto anchorPhase = synthesisPhase[peak];
         const auto previousIndex = findPreviousPeak(peak);
 
         if (previousIndex >= 0)
-            anchorPhase = unwrapNear(anchorPhase,
-                                     previousPeakPhases[static_cast<size_t>(previousIndex)]);
+        {
+            const auto previousPhase =
+                previousPeakPhases[static_cast<size_t>(previousIndex)];
+
+            const auto trackedPhase =
+                unwrapNear(anchorPhase, previousPhase);
+
+            const auto trackingBlend =
+                calculateTrackingBlend(peak, previousIndex, magnitude);
+
+            const auto phaseDelta =
+                wrapPhase(trackedPhase - previousPhase);
+
+            const auto predictedPhase =
+                previousPhase + phaseDelta;
+
+            anchorPhase = previousPhase
+                        + wrapPhase(predictedPhase - previousPhase) * trackingBlend
+                        + wrapPhase(anchorPhase - predictedPhase)
+                          * (1.0f - trackingBlend);
+        }
 
         synthesisPhase[peak] = anchorPhase;
         currentPeakBins[static_cast<size_t>(peakIndex)] = peak;
@@ -102,22 +133,47 @@ void IdentityPhaseLock::apply(float* synthesisPhase,
         if (ownerPeak < 0 || synthesisMagnitude[bin] <= 1.0e-12f)
             continue;
 
-        const auto relativeAnalysisPhase = wrapPhase(mappedAnalysisPhase[bin]
-                                                      - mappedAnalysisPhase[ownerPeak]);
-        synthesisPhase[bin] = synthesisPhase[ownerPeak] + relativeAnalysisPhase;
+        const auto relativeAnalysisPhase =
+            wrapPhase(mappedAnalysisPhase[bin]
+                      - mappedAnalysisPhase[ownerPeak]);
+
+        const auto lockedPhase =
+            synthesisPhase[ownerPeak] + relativeAnalysisPhase;
+
+        const auto magnitudeRatio =
+            synthesisMagnitude[ownerPeak] > 1.0e-12f
+                ? synthesisMagnitude[bin] / synthesisMagnitude[ownerPeak]
+                : 0.0f;
+
+        const auto lockStrength =
+            juce::jlimit(0.55f, 1.0f, 1.0f - 0.35f * magnitudeRatio);
+
+        const auto currentPhase = synthesisPhase[bin];
+        synthesisPhase[bin] =
+            currentPhase
+            + wrapPhase(lockedPhase - currentPhase) * lockStrength;
     }
 
     previousPeakCount = currentPeakCount;
+
     for (int index = 0; index < currentPeakCount; ++index)
     {
-        previousPeakBins[static_cast<size_t>(index)] = currentPeakBins[static_cast<size_t>(index)];
-        previousPeakPhases[static_cast<size_t>(index)] = currentPeakPhases[static_cast<size_t>(index)];
+        previousPeakBins[static_cast<size_t>(index)] =
+            currentPeakBins[static_cast<size_t>(index)];
+
+        previousPeakPhases[static_cast<size_t>(index)] =
+            currentPeakPhases[static_cast<size_t>(index)];
+
+        previousPeakMagnitudes[static_cast<size_t>(index)] =
+            currentPeakMagnitudes[static_cast<size_t>(index)];
     }
 }
 
 float IdentityPhaseLock::wrapPhase(float phase) noexcept
 {
-    return std::remainder(phase, juce::MathConstants<float>::twoPi);
+    return std::remainder(
+        phase,
+        juce::MathConstants<float>::twoPi);
 }
 
 float IdentityPhaseLock::unwrapNear(float phase, float reference) noexcept
@@ -127,13 +183,15 @@ float IdentityPhaseLock::unwrapNear(float phase, float reference) noexcept
 
 int IdentityPhaseLock::findPreviousPeak(int targetBin) const noexcept
 {
-    constexpr int maximumTrackingDistance = 8;
+    constexpr int maximumTrackingDistance = 10;
     auto bestIndex = -1;
     auto bestDistance = maximumTrackingDistance + 1;
 
     for (int index = 0; index < previousPeakCount; ++index)
     {
-        const auto distance = std::abs(previousPeakBins[static_cast<size_t>(index)] - targetBin);
+        const auto distance =
+            std::abs(previousPeakBins[static_cast<size_t>(index)] - targetBin);
+
         if (distance < bestDistance)
         {
             bestDistance = distance;
@@ -141,5 +199,44 @@ int IdentityPhaseLock::findPreviousPeak(int targetBin) const noexcept
         }
     }
 
-    return bestDistance <= maximumTrackingDistance ? bestIndex : -1;
+    return bestDistance <= maximumTrackingDistance
+        ? bestIndex
+        : -1;
+}
+
+float IdentityPhaseLock::calculateTrackingBlend(
+    int currentPeak,
+    int previousIndex,
+    float currentMagnitude) const noexcept
+{
+    if (previousIndex < 0 || previousIndex >= previousPeakCount)
+        return 0.0f;
+
+    const auto previousBin =
+        previousPeakBins[static_cast<size_t>(previousIndex)];
+
+    const auto distance =
+        static_cast<float>(std::abs(currentPeak - previousBin));
+
+    const auto distanceConfidence =
+        1.0f - juce::jlimit(0.0f, 1.0f, distance / 10.0f);
+
+    const auto previousMagnitude =
+        previousPeakMagnitudes[static_cast<size_t>(previousIndex)];
+
+    const auto magnitudeRatio =
+        previousMagnitude > 1.0e-12f
+            ? currentMagnitude / previousMagnitude
+            : 1.0f;
+
+    const auto magnitudeConfidence =
+        1.0f - juce::jlimit(
+            0.0f,
+            1.0f,
+            std::abs(std::log2(juce::jmax(1.0e-6f, magnitudeRatio))) * 0.5f);
+
+    return juce::jlimit(
+        0.35f,
+        0.92f,
+        0.35f + 0.57f * distanceConfidence * magnitudeConfidence);
 }
