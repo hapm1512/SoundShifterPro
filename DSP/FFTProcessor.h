@@ -25,6 +25,8 @@ public:
         synthesisFrequency.assign(static_cast<size_t>(numBins), 0.0f);
         synthesisPhaseReal.assign(static_cast<size_t>(numBins), 0.0f);
         synthesisPhaseImag.assign(static_cast<size_t>(numBins), 0.0f);
+        adaptiveMagnitude.assign(static_cast<size_t>(numBins), 0.0f);
+        spectralEnvelope.assign(static_cast<size_t>(numBins), 0.0f);
         mappedAnalysisPhase.assign(static_cast<size_t>(numBins), 0.0f);
         outputPhase.assign(static_cast<size_t>(numBins), 0.0f);
         peakDetector.prepare(numBins);
@@ -44,6 +46,8 @@ public:
         std::fill(synthesisFrequency.begin(), synthesisFrequency.end(), 0.0f);
         std::fill(synthesisPhaseReal.begin(), synthesisPhaseReal.end(), 0.0f);
         std::fill(synthesisPhaseImag.begin(), synthesisPhaseImag.end(), 0.0f);
+        std::fill(adaptiveMagnitude.begin(), adaptiveMagnitude.end(), 0.0f);
+        std::fill(spectralEnvelope.begin(), spectralEnvelope.end(), 0.0f);
         std::fill(mappedAnalysisPhase.begin(), mappedAnalysisPhase.end(), 0.0f);
         std::fill(outputPhase.begin(), outputPhase.end(), 0.0f);
         peakDetector.reset();
@@ -82,6 +86,8 @@ public:
         std::fill(synthesisFrequency.begin(), synthesisFrequency.end(), 0.0f);
         std::fill(synthesisPhaseReal.begin(), synthesisPhaseReal.end(), 0.0f);
         std::fill(synthesisPhaseImag.begin(), synthesisPhaseImag.end(), 0.0f);
+        std::fill(adaptiveMagnitude.begin(), adaptiveMagnitude.end(), 0.0f);
+        std::fill(spectralEnvelope.begin(), spectralEnvelope.end(), 0.0f);
         std::fill(mappedAnalysisPhase.begin(), mappedAnalysisPhase.end(), 0.0f);
         std::fill(outputPhase.begin(), outputPhase.end(), 0.0f);
 
@@ -106,6 +112,11 @@ public:
 
         peakDetector.detect(analysisMagnitude.data(), numBins);
 
+        prepareAdaptiveSpectrum(
+            safeRatio,
+            safeTransient,
+            highQuality);
+
         for (int sourceBin = 0; sourceBin < numBins; ++sourceBin)
         {
             const auto interpolationOffset =
@@ -125,7 +136,7 @@ public:
                 calculateHarmonicEnhancement(sourceBin, safeRatio, highQuality);
 
             const auto magnitude =
-                analysisMagnitude[static_cast<size_t>(sourceBin)] * enhancement;
+                adaptiveMagnitude[static_cast<size_t>(sourceBin)] * enhancement;
 
             addToSynthesisBin(
                 targetBin,
@@ -250,6 +261,98 @@ private:
         transformData[static_cast<size_t>(bin * 2 + 1)] = imag;
     }
 
+    void prepareAdaptiveSpectrum(float pitchRatio,
+                                 float transientAmount,
+                                 bool highQuality) noexcept
+    {
+        if (!highQuality)
+        {
+            juce::FloatVectorOperations::copy(
+                adaptiveMagnitude.data(),
+                analysisMagnitude.data(),
+                numBins);
+            return;
+        }
+
+        const auto shiftDistance =
+            juce::jlimit(0.0f, 1.0f, std::abs(std::log2(pitchRatio)));
+
+        const auto tonalBlend =
+            juce::jlimit(0.0f, 1.0f,
+                         (1.0f - transientAmount) * (0.45f + 0.40f * shiftDistance));
+
+        constexpr int envelopeRadius = 6;
+
+        for (int bin = 0; bin < numBins; ++bin)
+        {
+            float envelopeSum = 0.0f;
+            float envelopeWeight = 0.0f;
+
+            for (int offset = -envelopeRadius; offset <= envelopeRadius; ++offset)
+            {
+                const auto sourceBin = juce::jlimit(0, numBins - 1, bin + offset);
+                const auto distance = static_cast<float>(std::abs(offset));
+                const auto weight = 1.0f - distance / static_cast<float>(envelopeRadius + 1);
+
+                envelopeSum += analysisMagnitude[static_cast<size_t>(sourceBin)] * weight;
+                envelopeWeight += weight;
+            }
+
+            spectralEnvelope[static_cast<size_t>(bin)] =
+                envelopeWeight > 0.0f ? envelopeSum / envelopeWeight : 0.0f;
+        }
+
+        for (int bin = 0; bin < numBins; ++bin)
+        {
+            const auto normalisedBin =
+                static_cast<float>(bin) / static_cast<float>(numBins - 1);
+
+            const auto radius =
+                normalisedBin < 0.18f ? 4
+              : normalisedBin < 0.55f ? 2
+                                      : 1;
+
+            float localSum = 0.0f;
+            float localWeight = 0.0f;
+
+            for (int offset = -radius; offset <= radius; ++offset)
+            {
+                const auto sourceBin = juce::jlimit(0, numBins - 1, bin + offset);
+                const auto distance = static_cast<float>(std::abs(offset));
+                const auto weight = 1.0f - distance / static_cast<float>(radius + 1);
+
+                localSum += analysisMagnitude[static_cast<size_t>(sourceBin)] * weight;
+                localWeight += weight;
+            }
+
+            const auto localAverage =
+                localWeight > 0.0f ? localSum / localWeight : 0.0f;
+
+            const auto original =
+                analysisMagnitude[static_cast<size_t>(bin)];
+
+            const auto bandBlend =
+                normalisedBin < 0.18f ? tonalBlend
+              : normalisedBin < 0.55f ? tonalBlend * 0.58f
+                                      : tonalBlend * 0.24f;
+
+            const auto resolutionMagnitude =
+                juce::jmap(bandBlend, original, localAverage);
+
+            const auto envelope =
+                spectralEnvelope[static_cast<size_t>(bin)];
+
+            const auto envelopeBlend =
+                0.10f * shiftDistance * (1.0f - transientAmount);
+
+            adaptiveMagnitude[static_cast<size_t>(bin)] =
+                juce::jmax(0.0f,
+                           juce::jmap(envelopeBlend,
+                                      resolutionMagnitude,
+                                      0.82f * resolutionMagnitude + 0.18f * envelope));
+        }
+    }
+
     [[nodiscard]] float calculatePeakInterpolationOffset(int bin) const noexcept
     {
         if (bin <= 0 || bin >= numBins - 1)
@@ -321,6 +424,8 @@ private:
     std::vector<float> synthesisFrequency;
     std::vector<float> synthesisPhaseReal;
     std::vector<float> synthesisPhaseImag;
+    std::vector<float> adaptiveMagnitude;
+    std::vector<float> spectralEnvelope;
     std::vector<float> mappedAnalysisPhase;
     std::vector<float> outputPhase;
     PeakDetector peakDetector;
