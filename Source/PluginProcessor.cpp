@@ -188,16 +188,33 @@ void SoundShifterProAudioProcessor::processBlock(
     if (lastHQ != highQuality)
         lastHQ = highQuality;
 
-    pitchShiftEngine.setPitchSemitones(pitch);
-    pitchShiftEngine.setFineCents(fine);
+    static float lastPitch = 999.0f;
+    static float lastFine = 999.0f;
+
+    if (pitch != lastPitch)
+    {
+        pitchShiftEngine.setPitchSemitones(pitch);
+        lastPitch = pitch;
+    }
+
+    if (fine != lastFine)
+    {
+        pitchShiftEngine.setFineCents(fine);
+        lastFine = fine;
+    }
+
     pitchShiftEngine.setHighQuality(highQuality);
 
     bypassWetSmoothed.setTargetValue(bypassed ? 0.0f : 1.0f);
 
+    const bool unityPitch =
+        std::abs(pitch) < 0.001f && std::abs(fine) < 0.001f;
+
     const auto shouldProcessWet =
-        !bypassed
-        || bypassWetSmoothed.isSmoothing()
-        || bypassWetSmoothed.getCurrentValue() > 0.0001f;
+        (!unityPitch)
+        && (!bypassed
+            || bypassWetSmoothed.isSmoothing()
+            || bypassWetSmoothed.getCurrentValue() > 0.0001f);
 
     if (shouldProcessWet)
         pitchShiftEngine.process(buffer);
