@@ -46,9 +46,11 @@ public:
         jassert(samples != nullptr);
         jassert(numberOfSamples == size);
 
+        const auto* coeffs = selectedAnalysis;
+
         juce::FloatVectorOperations::multiply(
             samples,
-            selectedAnalysis,
+            coeffs,
             numberOfSamples);
     }
 
@@ -57,9 +59,11 @@ public:
         jassert(samples != nullptr);
         jassert(numberOfSamples == size);
 
+        const auto* coeffs = selectedSynthesis;
+
         juce::FloatVectorOperations::multiply(
             samples,
-            selectedSynthesis,
+            coeffs,
             numberOfSamples);
     }
 
@@ -101,11 +105,13 @@ private:
             }
 
             const auto coefficient = analysis[static_cast<size_t>(sample)];
+            const auto inverseEnergy =
+                overlapEnergy > SoundShifterDSP::Config::magnitudeFloor
+                    ? 1.0f / overlapEnergy
+                    : 0.0f;
 
             synthesis[static_cast<size_t>(sample)] =
-                overlapEnergy > SoundShifterDSP::Config::magnitudeFloor
-                    ? coefficient / overlapEnergy
-                    : 0.0f;
+                coefficient * inverseEnergy;
         }
     }
 
