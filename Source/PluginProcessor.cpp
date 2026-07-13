@@ -273,11 +273,20 @@ void SoundShifterProAudioProcessor::applyOutputGain(
         ? outputParameter->load()
         : 0.0f;
 
-    outputGainLinear.setTargetValue(
-        juce::Decibels::decibelsToGain(outputDb));
+    const auto targetGain =
+        juce::jlimit(
+            0.0631f,
+            3.9811f,
+            juce::Decibels::decibelsToGain(outputDb));
+
+    outputGainLinear.setTargetValue(targetGain);
 
     const auto startGain = outputGainLinear.getCurrentValue();
     const auto endGain = outputGainLinear.skip(numSamples);
+
+    if (std::abs(startGain - 1.0f) < 0.0005f
+        && std::abs(endGain - 1.0f) < 0.0005f)
+        return;
 
     for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
     {
