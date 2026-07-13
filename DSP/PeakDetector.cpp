@@ -191,10 +191,17 @@ int PeakDetector::findTrackedPeak(int bin, int binsToScan) const noexcept
         const auto confidence =
             previousConfidence[static_cast<size_t>(candidate)];
 
+        const auto harmonicContinuity =
+            1.0f - juce::jlimit(
+                0.0f,
+                1.0f,
+                std::abs(confidence - lifetimeWeight));
+
         const auto score =
-            0.58f * confidence
-            + 0.27f * distanceWeight
-            + 0.15f * lifetimeWeight;
+            0.50f * confidence
+            + 0.22f * distanceWeight
+            + 0.16f * lifetimeWeight
+            + 0.12f * harmonicContinuity;
 
         if (score > bestScore)
         {
@@ -259,11 +266,19 @@ void PeakDetector::addPeak(int bin,
         1.0f,
         magnitude / juce::jmax(maximumMagnitude, minimumMagnitude));
 
+    const auto harmonicIsolation =
+        juce::jlimit(
+            0.0f,
+            1.0f,
+            (magnitude - minimumMagnitude)
+            / (maximumMagnitude + minimumMagnitude));
+
     auto confidence = juce::jlimit(
         0.0f,
         1.0f,
-        0.54f * normalisedMagnitude
-            + 0.46f * prominence);
+        0.46f * normalisedMagnitude
+            + 0.36f * prominence
+            + 0.18f * harmonicIsolation);
 
     uint16_t lifetime = 1;
 
