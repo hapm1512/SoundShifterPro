@@ -235,6 +235,15 @@ void PitchShiftEngine::applyStereoEnergyLink() noexcept
     const auto outputCorrelation = calculateCorrelation(
         outputLeft, outputRight, frameSize);
 
+    const auto coherenceError =
+        std::abs(inputCorrelation - outputCorrelation);
+
+    const auto coherenceWeight =
+        juce::jlimit(
+            0.0f,
+            1.0f,
+            1.0f - coherenceError * 2.0f);
+
     auto targetSideGain = 1.0f;
 
     if (outputCorrelation > inputCorrelation + 0.08f)
@@ -251,6 +260,11 @@ void PitchShiftEngine::applyStereoEnergyLink() noexcept
 
         targetSideGain = 1.0f - excessiveWidth * 0.12f;
     }
+
+    targetSideGain = juce::jmap(
+        coherenceWeight,
+        targetSideGain,
+        1.0f);
 
     smoothedSideGain += smoothing * (targetSideGain - smoothedSideGain);
     smoothedSideGain = juce::jlimit(
