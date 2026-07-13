@@ -15,6 +15,23 @@ namespace SoundShifterDSP
         static constexpr int maxPeaks = 256;
 
         static constexpr float silenceFloorDb = -120.0f;
+        static constexpr float magnitudeFloor = 1.0e-12f;
+        static constexpr float energyFloor = 1.0e-18f;
+
+        // Supported pitch range: -12 to +12 semitones.
+        static constexpr float minimumPitchRatio = 0.5f;
+        static constexpr float maximumPitchRatio = 2.0f;
+
+        // FAST quality profile.
+        static constexpr float fastEnergyGainMinimum = 0.94f;
+        static constexpr float fastEnergyGainMaximum = 1.06f;
+
+        // HQ quality profile.
+        static constexpr float hqEnergyGainMinimum = 0.90f;
+        static constexpr float hqEnergyGainMaximum = 1.12f;
+        static constexpr float hqHarmonicEnhancementMaximum = 1.10f;
+        static constexpr float hqLeakageGainMinimum = 0.94f;
+        static constexpr float hqLeakageGainMaximum = 1.06f;
 
         // Epic 3D: transient analysis foundation.
         static constexpr bool enableTransient = true;
@@ -26,5 +43,10 @@ namespace SoundShifterDSP
         static constexpr float transientBlend = 0.35f;
         static constexpr float transientPhaseResetHQ = 0.72f;
         static constexpr float transientPhaseResetFast = 0.48f;
+
+        static_assert(fftSize > 0);
+        static_assert(hopSize > 0);
+        static_assert(fftSize % hopSize == 0);
+        static_assert(overlapFactor >= 2);
     };
 }

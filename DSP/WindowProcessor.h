@@ -41,11 +41,11 @@ public:
         jassert(samples != nullptr);
         jassert(numberOfSamples == size);
 
-        const auto& coefficients = highQuality ? hqAnalysis : fastAnalysis;
+        const auto* coefficients = getAnalysisCoefficients();
 
         juce::FloatVectorOperations::multiply(
             samples,
-            coefficients.data(),
+            coefficients,
             numberOfSamples);
     }
 
@@ -54,11 +54,11 @@ public:
         jassert(samples != nullptr);
         jassert(numberOfSamples == size);
 
-        const auto& coefficients = highQuality ? hqSynthesis : fastSynthesis;
+        const auto* coefficients = getSynthesisCoefficients();
 
         juce::FloatVectorOperations::multiply(
             samples,
-            coefficients.data(),
+            coefficients,
             numberOfSamples);
     }
 
@@ -68,6 +68,16 @@ public:
     }
 
 private:
+    [[nodiscard]] const float* getAnalysisCoefficients() const noexcept
+    {
+        return highQuality ? hqAnalysis.data() : fastAnalysis.data();
+    }
+
+    [[nodiscard]] const float* getSynthesisCoefficients() const noexcept
+    {
+        return highQuality ? hqSynthesis.data() : fastSynthesis.data();
+    }
+
     void normaliseSynthesisWindow(const std::vector<float>& analysis,
                                   std::vector<float>& synthesis)
     {
@@ -91,7 +101,7 @@ private:
             const auto coefficient = analysis[static_cast<size_t>(sample)];
 
             synthesis[static_cast<size_t>(sample)] =
-                overlapEnergy > 1.0e-8f
+                overlapEnergy > SoundShifterDSP::Config::magnitudeFloor
                     ? coefficient / overlapEnergy
                     : 0.0f;
         }

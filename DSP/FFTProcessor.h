@@ -44,18 +44,7 @@ public:
         std::fill(analysisMagnitude.begin(), analysisMagnitude.end(), 0.0f);
         std::fill(analysisFrequency.begin(), analysisFrequency.end(), 0.0f);
         std::fill(analysisPhase.begin(), analysisPhase.end(), 0.0f);
-        std::fill(synthesisMagnitude.begin(), synthesisMagnitude.end(), 0.0f);
-        std::fill(synthesisFrequency.begin(), synthesisFrequency.end(), 0.0f);
-        std::fill(synthesisPhaseReal.begin(), synthesisPhaseReal.end(), 0.0f);
-        std::fill(synthesisPhaseImag.begin(), synthesisPhaseImag.end(), 0.0f);
-        std::fill(adaptiveMagnitude.begin(), adaptiveMagnitude.end(), 0.0f);
-        std::fill(spectralEnvelope.begin(), spectralEnvelope.end(), 0.0f);
-        std::fill(leakageCompensatedMagnitude.begin(),
-                  leakageCompensatedMagnitude.end(),
-                  0.0f);
-        std::fill(mappedEnergy.begin(), mappedEnergy.end(), 0.0f);
-        std::fill(mappedAnalysisPhase.begin(), mappedAnalysisPhase.end(), 0.0f);
-        std::fill(outputPhase.begin(), outputPhase.end(), 0.0f);
+        clearFrameBuffers();
         peakDetector.reset();
         identityPhaseLock.reset();
     }
@@ -70,7 +59,10 @@ public:
 
         constexpr auto fftSize = SoundShifterDSP::Config::fftSize;
         constexpr auto hopSize = SoundShifterDSP::Config::hopSize;
-        const auto safeRatio = juce::jlimit(0.5f, 2.0f, pitchRatio);
+        const auto safeRatio = juce::jlimit(
+            SoundShifterDSP::Config::minimumPitchRatio,
+            SoundShifterDSP::Config::maximumPitchRatio,
+            pitchRatio);
         const auto safeTransient = juce::jlimit(0.0f, 1.0f, transientAmount);
         const auto phaseResetMaximum = highQuality
             ? SoundShifterDSP::Config::transientPhaseResetHQ
@@ -191,7 +183,7 @@ public:
             const auto magnitude = synthesisMagnitude[static_cast<size_t>(bin)];
             auto frequency = synthesisFrequency[static_cast<size_t>(bin)];
 
-            if (magnitude > 1.0e-12f)
+            if (magnitude > SoundShifterDSP::Config::magnitudeFloor)
                 frequency /= magnitude;
             else
                 frequency = static_cast<float>(bin) * frequencyPerBin;
@@ -205,7 +197,7 @@ public:
                                               * synthesisPhaseReal[static_cast<size_t>(bin)]
                                               + synthesisPhaseImag[static_cast<size_t>(bin)]
                                               * synthesisPhaseImag[static_cast<size_t>(bin)]);
-            mappedAnalysisPhase[static_cast<size_t>(bin)] = phaseWeight > 1.0e-12f
+            mappedAnalysisPhase[static_cast<size_t>(bin)] = phaseWeight > SoundShifterDSP::Config::magnitudeFloor
                 ? std::atan2(synthesisPhaseImag[static_cast<size_t>(bin)],
                              synthesisPhaseReal[static_cast<size_t>(bin)])
                 : 0.0f;
@@ -224,7 +216,7 @@ public:
         {
             for (int bin = 0; bin < numBins; ++bin)
             {
-                if (synthesisMagnitude[static_cast<size_t>(bin)] <= 1.0e-12f)
+                if (synthesisMagnitude[static_cast<size_t>(bin)] <= SoundShifterDSP::Config::magnitudeFloor)
                     continue;
 
                 const auto currentPhase = outputPhase[static_cast<size_t>(bin)];
@@ -292,6 +284,20 @@ private:
 
         transformData[static_cast<size_t>(bin * 2)] = real;
         transformData[static_cast<size_t>(bin * 2 + 1)] = imag;
+    }
+
+    void clearFrameBuffers() noexcept
+    {
+        juce::FloatVectorOperations::clear(synthesisMagnitude.data(), numBins);
+        juce::FloatVectorOperations::clear(synthesisFrequency.data(), numBins);
+        juce::FloatVectorOperations::clear(synthesisPhaseReal.data(), numBins);
+        juce::FloatVectorOperations::clear(synthesisPhaseImag.data(), numBins);
+        juce::FloatVectorOperations::clear(adaptiveMagnitude.data(), numBins);
+        juce::FloatVectorOperations::clear(spectralEnvelope.data(), numBins);
+        juce::FloatVectorOperations::clear(leakageCompensatedMagnitude.data(), numBins);
+        juce::FloatVectorOperations::clear(mappedEnergy.data(), numBins);
+        juce::FloatVectorOperations::clear(mappedAnalysisPhase.data(), numBins);
+        juce::FloatVectorOperations::clear(outputPhase.data(), numBins);
     }
 
     void prepareAdaptiveSpectrum(float pitchRatio,
@@ -412,7 +418,7 @@ private:
             const auto centre =
                 adaptiveMagnitude[static_cast<size_t>(bin)];
 
-            if (bin <= 1 || bin >= numBins - 2 || centre <= 1.0e-12f)
+            if (bin <= 1 || bin >= numBins - 2 || centre <= SoundShifterDSP::Config::magnitudeFloor)
             {
                 leakageCompensatedMagnitude[static_cast<size_t>(bin)] = centre;
                 continue;
@@ -440,7 +446,7 @@ private:
             const auto sideLobeRatio = juce::jlimit(
                 0.0f,
                 1.0f,
-                neighbourAverage / (centre + neighbourAverage + 1.0e-12f));
+                neighbourAverage / (centre + neighbourAverage + SoundShifterDSP::Config::magnitudeFloor));
 
             const auto normalisedBin =
                 static_cast<float>(bin)
@@ -518,12 +524,12 @@ private:
             outputEnergy += output * output;
         }
 
-        if (inputEnergy <= 1.0e-18 || outputEnergy <= 1.0e-18)
+        if (inputEnergy <= SoundShifterDSP::Config::energyFloor || outputEnergy <= SoundShifterDSP::Config::energyFloor)
             return;
 
         const auto gain = juce::jlimit(
-            0.94f,
-            1.06f,
+            SoundShifterDSP::Config::hqLeakageGainMinimum,
+            SoundShifterDSP::Config::hqLeakageGainMaximum,
             static_cast<float>(std::sqrt(inputEnergy / outputEnergy)));
 
         juce::FloatVectorOperations::multiply(
@@ -546,7 +552,7 @@ private:
 
         const auto denominator = left - 2.0f * centre + right;
 
-        if (std::abs(denominator) <= 1.0e-12f)
+        if (std::abs(denominator) <= SoundShifterDSP::Config::magnitudeFloor)
             return 0.0f;
 
         const auto offset = 0.5f * (left - right) / denominator;
@@ -565,7 +571,7 @@ private:
         const auto magnitude =
             analysisMagnitude[static_cast<size_t>(bin)];
 
-        if (magnitude <= 1.0e-12f)
+        if (magnitude <= SoundShifterDSP::Config::magnitudeFloor)
             return 1.0f;
 
         const auto left =
@@ -578,7 +584,7 @@ private:
         const auto peakDominance = juce::jlimit(
             0.0f,
             1.0f,
-            (magnitude - localMaximum) / (magnitude + 1.0e-12f));
+            (magnitude - localMaximum) / (magnitude + SoundShifterDSP::Config::magnitudeFloor));
 
         const auto envelope =
             spectralEnvelope[static_cast<size_t>(bin)];
@@ -586,7 +592,7 @@ private:
         const auto envelopeRatio = juce::jlimit(
             0.0f,
             2.0f,
-            magnitude / (envelope + 1.0e-12f));
+            magnitude / (envelope + SoundShifterDSP::Config::magnitudeFloor));
 
         const auto tonalConfidence = juce::jlimit(
             0.0f,
@@ -649,7 +655,10 @@ private:
         const auto enhancement =
             1.0f + 0.10f * shiftDistance * presenceWeight * airRolloff;
 
-        return juce::jlimit(1.0f, 1.10f, enhancement);
+        return juce::jlimit(
+            1.0f,
+            SoundShifterDSP::Config::hqHarmonicEnhancementMaximum,
+            enhancement);
     }
 
     void distributePitchMappedEnergy(int targetBin,
@@ -737,7 +746,7 @@ private:
 
         const auto totalWeight = wMinus + w0 + w1 + wPlus;
 
-        if (totalWeight > 1.0e-12f)
+        if (totalWeight > SoundShifterDSP::Config::magnitudeFloor)
         {
             const auto normalise = 1.0f / totalWeight;
             wMinus *= normalise;
@@ -796,7 +805,7 @@ private:
             const auto centre =
                 mappedEnergy[static_cast<size_t>(bin)];
 
-            if (centre <= 1.0e-12f)
+            if (centre <= SoundShifterDSP::Config::magnitudeFloor)
                 continue;
 
             const auto left1 =
@@ -824,7 +833,7 @@ private:
                         juce::jmax(left2, right2)));
 
             const auto harmonicConfidence =
-                localMaximum > 1.0e-12f
+                localMaximum > SoundShifterDSP::Config::magnitudeFloor
                     ? juce::jlimit(
                           0.0f,
                           1.0f,
@@ -832,7 +841,7 @@ private:
                     : 0.0f;
 
             const auto valleyAmount =
-                localAverage > 1.0e-12f
+                localAverage > SoundShifterDSP::Config::magnitudeFloor
                     ? juce::jlimit(
                           0.0f,
                           1.0f,
@@ -874,7 +883,7 @@ private:
                     0.0f,
                     1.0f,
                     (centre - localAverage)
-                        / (centre + 1.0e-12f))
+                        / (centre + SoundShifterDSP::Config::magnitudeFloor))
                 * 0.35f;
 
             const auto gain = juce::jlimit(
@@ -893,9 +902,6 @@ private:
                               std::vector<float>& targetMagnitude,
                               bool highQuality) noexcept
     {
-        if (!highQuality)
-            return;
-
         double sourceEnergy = 0.0;
         double targetEnergy = 0.0;
 
@@ -911,12 +917,20 @@ private:
             targetEnergy += target * target;
         }
 
-        if (sourceEnergy <= 1.0e-18 || targetEnergy <= 1.0e-18)
+        if (sourceEnergy <= SoundShifterDSP::Config::energyFloor || targetEnergy <= SoundShifterDSP::Config::energyFloor)
             return;
 
+        const auto minimumGain = highQuality
+            ? SoundShifterDSP::Config::hqEnergyGainMinimum
+            : SoundShifterDSP::Config::fastEnergyGainMinimum;
+
+        const auto maximumGain = highQuality
+            ? SoundShifterDSP::Config::hqEnergyGainMaximum
+            : SoundShifterDSP::Config::fastEnergyGainMaximum;
+
         const auto gain = juce::jlimit(
-            0.90f,
-            1.12f,
+            minimumGain,
+            maximumGain,
             static_cast<float>(std::sqrt(sourceEnergy / targetEnergy)));
 
         juce::FloatVectorOperations::multiply(
