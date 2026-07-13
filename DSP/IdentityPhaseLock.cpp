@@ -145,13 +145,19 @@ void IdentityPhaseLock::apply(float* synthesisPhase,
             const auto predictionError =
                 wrapPhase(unwrappedPhase - predictedPhase);
 
-            anchorPhase =
-                predictedPhase + predictionError * (1.0f - trackingBlend);
+            const auto velocityBlend =
+                0.18f + 0.32f * (1.0f - trackingBlend);
+
+            const auto dampedPrediction =
+                predictedPhase
+                + predictionError * (1.0f - trackingBlend * 0.82f);
+
+            anchorPhase = unwrapNear(dampedPrediction, previousPhase);
 
             phaseVelocity =
                 previousVelocity
                 + wrapPhase(measuredVelocity - previousVelocity)
-                  * (0.22f + 0.38f * (1.0f - trackingBlend));
+                  * velocityBlend;
         }
 
         synthesisPhase[peak] = anchorPhase;
@@ -191,18 +197,23 @@ void IdentityPhaseLock::apply(float* synthesisPhase,
         const auto distanceWeight =
             1.0f - juce::jlimit(0.0f, 1.0f, distance / 18.0f);
 
+        const auto harmonicWeight =
+            1.0f - juce::jlimit(0.0f, 1.0f, magnitudeRatio);
+
         const auto lockStrength = juce::jlimit(
-            0.48f,
-            0.98f,
-            0.58f
-                + 0.30f * distanceWeight
-                + 0.10f * (1.0f - juce::jlimit(0.0f, 1.0f, magnitudeRatio)));
+            0.55f,
+            0.97f,
+            0.62f
+                + 0.24f * distanceWeight
+                + 0.08f * harmonicWeight);
 
         const auto currentPhase = synthesisPhase[bin];
 
+        const auto phaseError =
+            wrapPhase(lockedPhase - currentPhase);
+
         synthesisPhase[bin] =
-            currentPhase
-            + wrapPhase(lockedPhase - currentPhase) * lockStrength;
+            currentPhase + phaseError * lockStrength;
     }
 
     previousPeakCount = currentPeakCount;
@@ -257,9 +268,13 @@ int IdentityPhaseLock::findPreviousPeak(int targetBin) const noexcept
         const auto magnitude =
             previousPeakMagnitudes[static_cast<size_t>(index)];
 
+        const auto magnitudeConfidence =
+            juce::jlimit(0.0f, 1.0f, magnitude);
+
         const auto score =
-            0.78f * distanceConfidence
-            + 0.22f * juce::jlimit(0.0f, 1.0f, magnitude);
+            0.64f * distanceConfidence
+            + 0.24f * magnitudeConfidence
+            + 0.12f * (1.0f - distance / static_cast<float>(maximumTrackingDistance));
 
         if (score > bestScore)
         {
@@ -304,11 +319,9 @@ float IdentityPhaseLock::calculateTrackingBlend(
                 std::log2(
                     juce::jmax(1.0e-6f, magnitudeRatio))) * 0.45f);
 
-    return juce::jlimit(
-        0.40f,
-        0.94f,
-        0.40f
-            + 0.54f
-              * distanceConfidence
-              * magnitudeConfidence);
+    const auto blend =
+        0.46f
+        + 0.46f * distanceConfidence * magnitudeConfidence;
+
+    return juce::jlimit(0.46f, 0.92f, blend);
 }
