@@ -28,6 +28,8 @@ void PitchShiftEngine::reset() noexcept
     {
         inputRings[static_cast<size_t>(channel)].reset();
         fftProcessors[static_cast<size_t>(channel)].reset();
+        transientDetectors[static_cast<size_t>(channel)].reset();
+        transientStrength[static_cast<size_t>(channel)] = 0.0f;
         std::fill(inputFrames[static_cast<size_t>(channel)].begin(),
                   inputFrames[static_cast<size_t>(channel)].end(), 0.0f);
         std::fill(outputFrames[static_cast<size_t>(channel)].begin(),
@@ -99,10 +101,24 @@ void PitchShiftEngine::processAvailableFrames() noexcept
         auto& output = outputFrames[static_cast<size_t>(channel)];
 
         ring.copyOldestToNewest(input.data(), SoundShifterDSP::Config::fftSize);
+
+        if constexpr (SoundShifterDSP::Config::enableTransient)
+        {
+            transientStrength[static_cast<size_t>(channel)] =
+                transientDetectors[static_cast<size_t>(channel)].process(
+                    input.data(), SoundShifterDSP::Config::fftSize);
+        }
+        else
+        {
+            transientStrength[static_cast<size_t>(channel)] = 0.0f;
+        }
+
         fftProcessors[static_cast<size_t>(channel)].processPitchFrame(
             input.data(), output.data(), pitchRatio);
         overlapAdd.addFrame(channel, output.data());
     }
 
-    juce::ignoreUnused(highQuality);
+    // Epic 3D.2 only analyses transients. Epic 3D.3 will use these
+    // values to adapt phase locking and transient reconstruction.
+    juce::ignoreUnused(highQuality, transientStrength);
 }
