@@ -21,6 +21,40 @@ SoundShifterProAudioProcessor::SoundShifterProAudioProcessor()
       apvts(*this, nullptr, "PARAMETERS", createParameterLayout())
 {
     cacheParameterPointers();
+    registerParameterListeners();
+}
+
+SoundShifterProAudioProcessor::~SoundShifterProAudioProcessor()
+{
+    unregisterParameterListeners();
+}
+
+void SoundShifterProAudioProcessor::registerParameterListeners()
+{
+    for (const auto* parameterId : {
+             ParameterIDs::pitch,
+             ParameterIDs::fine,
+             ParameterIDs::mix,
+             ParameterIDs::output,
+             ParameterIDs::bypass,
+             ParameterIDs::hq })
+    {
+        apvts.addParameterListener(parameterId, this);
+    }
+}
+
+void SoundShifterProAudioProcessor::unregisterParameterListeners() noexcept
+{
+    for (const auto* parameterId : {
+             ParameterIDs::pitch,
+             ParameterIDs::fine,
+             ParameterIDs::mix,
+             ParameterIDs::output,
+             ParameterIDs::bypass,
+             ParameterIDs::hq })
+    {
+        apvts.removeParameterListener(parameterId, this);
+    }
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout
@@ -414,6 +448,50 @@ void SoundShifterProAudioProcessor::updateMeters(
         outputLeftDb.store(leftDb);
         outputRightDb.store(rightDb);
     }
+}
+
+void SoundShifterProAudioProcessor::parameterChanged(
+    const juce::String& parameterID,
+    float newValue)
+{
+    ParameterChange change = ParameterChange::none;
+
+    if (parameterID == ParameterIDs::pitch)
+        change = ParameterChange::pitch;
+    else if (parameterID == ParameterIDs::fine)
+        change = ParameterChange::fine;
+    else if (parameterID == ParameterIDs::mix)
+        change = ParameterChange::mix;
+    else if (parameterID == ParameterIDs::output)
+        change = ParameterChange::output;
+    else if (parameterID == ParameterIDs::bypass)
+        change = ParameterChange::bypass;
+    else if (parameterID == ParameterIDs::hq)
+        change = ParameterChange::highQuality;
+
+    if (change == ParameterChange::none)
+        return;
+
+    lastParameterValue.store(newValue, std::memory_order_relaxed);
+    lastParameterChange.store(change, std::memory_order_release);
+    parameterChangeRevision.fetch_add(1, std::memory_order_release);
+}
+
+SoundShifterProAudioProcessor::ParameterChange
+SoundShifterProAudioProcessor::getLastParameterChange() const noexcept
+{
+    return lastParameterChange.load(std::memory_order_acquire);
+}
+
+float SoundShifterProAudioProcessor::getLastParameterValue() const noexcept
+{
+    return lastParameterValue.load(std::memory_order_acquire);
+}
+
+juce::uint64
+SoundShifterProAudioProcessor::getParameterChangeRevision() const noexcept
+{
+    return parameterChangeRevision.load(std::memory_order_acquire);
 }
 
 void SoundShifterProAudioProcessor::toneUp()

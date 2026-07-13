@@ -3,7 +3,9 @@
 #include <JuceHeader.h>
 #include "../DSP/PitchShiftEngine.h"
 
-class SoundShifterProAudioProcessor final : public juce::AudioProcessor
+class SoundShifterProAudioProcessor final
+    : public juce::AudioProcessor,
+      private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     enum class MidiLearnTarget
@@ -14,8 +16,19 @@ public:
         pitchReset
     };
 
+    enum class ParameterChange
+    {
+        none,
+        pitch,
+        fine,
+        mix,
+        output,
+        bypass,
+        highQuality
+    };
+
     SoundShifterProAudioProcessor();
-    ~SoundShifterProAudioProcessor() override = default;
+    ~SoundShifterProAudioProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -67,6 +80,10 @@ public:
     void setBypass(bool enabled);
     [[nodiscard]] bool getBypass() const noexcept;
 
+    [[nodiscard]] ParameterChange getLastParameterChange() const noexcept;
+    [[nodiscard]] float getLastParameterValue() const noexcept;
+    [[nodiscard]] juce::uint64 getParameterChangeRevision() const noexcept;
+
     void beginMidiLearn(MidiLearnTarget target) noexcept;
     void cancelMidiLearn() noexcept;
     [[nodiscard]] bool isMidiLearning() const noexcept;
@@ -75,6 +92,11 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
 private:
+    void parameterChanged(const juce::String& parameterID,
+                          float newValue) override;
+    void registerParameterListeners();
+    void unregisterParameterListeners() noexcept;
+
     void cacheParameterPointers() noexcept;
     void handleMidiControl(const juce::MidiBuffer& midiMessages);
     void changePitchBySemitones(float amount);
@@ -114,6 +136,10 @@ private:
 
     std::array<bool, 128> ccPressed {};
     std::atomic<MidiLearnTarget> midiLearnTarget { MidiLearnTarget::none };
+
+    std::atomic<ParameterChange> lastParameterChange { ParameterChange::none };
+    std::atomic<float> lastParameterValue { 0.0f };
+    std::atomic<juce::uint64> parameterChangeRevision { 0 };
 
     std::atomic<float> inputLeftDb { -100.0f };
     std::atomic<float> inputRightDb { -100.0f };
