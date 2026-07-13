@@ -154,10 +154,19 @@ public:
                     safeTransient,
                     highQuality);
 
+            const auto formantWeight =
+                calculateFormantDriftCompensation(
+                    sourceBin,
+                    targetPosition,
+                    safeRatio,
+                    safeTransient,
+                    highQuality);
+
             const auto magnitude =
                 leakageCompensatedMagnitude[static_cast<size_t>(sourceBin)]
                 * enhancement
-                * binWeight;
+                * binWeight
+                * formantWeight;
 
             distributePitchMappedEnergy(
                 targetBin,
@@ -570,6 +579,77 @@ private:
 
         const auto offset = 0.5f * (left - right) / denominator;
         return juce::jlimit(-0.5f, 0.5f, offset);
+    }
+
+    [[nodiscard]] float calculateFormantDriftCompensation(
+        int sourceBin,
+        float targetPosition,
+        float pitchRatio,
+        float transientAmount,
+        bool highQuality) const noexcept
+    {
+        if (!highQuality
+            || sourceBin <= 0
+            || sourceBin >= numBins - 1)
+            return 1.0f;
+
+        const auto targetBin = juce::jlimit(
+            0,
+            numBins - 1,
+            juce::roundToInt(targetPosition));
+
+        const auto sourceEnvelope =
+            spectralEnvelope[static_cast<size_t>(sourceBin)];
+
+        const auto targetEnvelope =
+            spectralEnvelope[static_cast<size_t>(targetBin)];
+
+        if (sourceEnvelope <= SoundShifterDSP::Config::magnitudeFloor
+            || targetEnvelope <= SoundShifterDSP::Config::magnitudeFloor)
+            return 1.0f;
+
+        const auto rawRatio = juce::jlimit(
+            0.72f,
+            1.38f,
+            targetEnvelope
+                / (sourceEnvelope
+                   + SoundShifterDSP::Config::magnitudeFloor));
+
+        const auto shiftDistance = juce::jlimit(
+            0.0f,
+            1.0f,
+            std::abs(std::log2(pitchRatio)));
+
+        const auto transientProtection =
+            1.0f - 0.82f * transientAmount;
+
+        const auto normalisedTarget =
+            static_cast<float>(targetBin)
+            / static_cast<float>(numBins - 1);
+
+        const auto lowBandProtection =
+            1.0f - 0.55f * juce::jlimit(
+                0.0f,
+                1.0f,
+                (0.14f - normalisedTarget) / 0.14f);
+
+        const auto highBandProtection =
+            1.0f - 0.40f * juce::jlimit(
+                0.0f,
+                1.0f,
+                (normalisedTarget - 0.82f) / 0.18f);
+
+        const auto correctionAmount =
+            0.62f
+            * shiftDistance
+            * transientProtection
+            * lowBandProtection
+            * highBandProtection;
+
+        return juce::jlimit(
+            0.82f,
+            1.22f,
+            juce::jmap(correctionAmount, 1.0f, rawRatio));
     }
 
     [[nodiscard]] float calculateAdaptiveBinWeight(
