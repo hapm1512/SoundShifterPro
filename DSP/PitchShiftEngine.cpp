@@ -42,6 +42,8 @@ void PitchShiftEngine::reset() noexcept
     smoothedLeftGain = 1.0f;
     smoothedRightGain = 1.0f;
     smoothedSideGain = 1.0f;
+    smoothedOutputGain = 1.0f;
+    transientAmounts.fill(0.0f);
 }
 
 void PitchShiftEngine::setPitchSemitones(float newSemitones) noexcept
@@ -96,7 +98,7 @@ void PitchShiftEngine::processAvailableFrames() noexcept
     const auto pitchRatio = std::pow(2.0f, totalSemitones / 12.0f);
 
     bool allFramesReady = true;
-    std::array<float, SoundShifterDSP::Config::maxChannels> transientAmounts {};
+    transientAmounts.fill(0.0f);
 
     for (int channel = 0; channel < activeChannels; ++channel)
     {
@@ -154,6 +156,8 @@ void PitchShiftEngine::processAvailableFrames() noexcept
     if (activeChannels == 2)
         applyStereoEnergyLink();
 
+    applyOutputGainCompensation();
+
     for (int channel = 0; channel < activeChannels; ++channel)
     {
         overlapAdd.addFrame(
@@ -193,12 +197,18 @@ void PitchShiftEngine::applyStereoEnergyLink() noexcept
         linkedOutputEnergy * (0.35f + 1.30f * inputRightShare));
 
     const auto rawLeftGain = juce::jlimit(
-        0.70f, 1.35f, targetLeftRms / (outputLeftRms + epsilon));
+        SoundShifterDSP::Config::stereoGainMinimum,
+        SoundShifterDSP::Config::stereoGainMaximum,
+        targetLeftRms / (outputLeftRms + epsilon));
 
     const auto rawRightGain = juce::jlimit(
-        0.70f, 1.35f, targetRightRms / (outputRightRms + epsilon));
+        SoundShifterDSP::Config::stereoGainMinimum,
+        SoundShifterDSP::Config::stereoGainMaximum,
+        targetRightRms / (outputRightRms + epsilon));
 
-    const auto smoothing = highQuality ? 0.16f : 0.28f;
+    const auto smoothing = highQuality
+        ? SoundShifterDSP::Config::stereoEnergySmoothingHQ
+        : SoundShifterDSP::Config::stereoEnergySmoothingFast;
 
     smoothedLeftGain += smoothing * (rawLeftGain - smoothedLeftGain);
     smoothedRightGain += smoothing * (rawRightGain - smoothedRightGain);
@@ -227,7 +237,10 @@ void PitchShiftEngine::applyStereoEnergyLink() noexcept
     }
 
     smoothedSideGain += smoothing * (targetSideGain - smoothedSideGain);
-    smoothedSideGain = juce::jlimit(0.88f, 1.28f, smoothedSideGain);
+    smoothedSideGain = juce::jlimit(
+        SoundShifterDSP::Config::stereoSideMinimum,
+        SoundShifterDSP::Config::stereoSideMaximum,
+        smoothedSideGain);
 
     for (int sample = 0; sample < frameSize; ++sample)
     {
@@ -251,6 +264,51 @@ void PitchShiftEngine::applyStereoEnergyLink() noexcept
 
     juce::FloatVectorOperations::multiply(outputLeft, balanceGain, frameSize);
     juce::FloatVectorOperations::multiply(outputRight, balanceGain, frameSize);
+}
+
+void PitchShiftEngine::applyOutputGainCompensation() noexcept
+{
+    constexpr int frameSize = SoundShifterDSP::Config::fftSize;
+    constexpr float epsilon = SoundShifterDSP::Config::magnitudeFloor;
+
+    double inputEnergy = 0.0;
+    double outputEnergy = 0.0;
+
+    for (int channel = 0; channel < activeChannels; ++channel)
+    {
+        const auto inputRms = calculateRms(
+            inputFrames[static_cast<size_t>(channel)].data(),
+            frameSize);
+
+        const auto outputRms = calculateRms(
+            outputFrames[static_cast<size_t>(channel)].data(),
+            frameSize);
+
+        inputEnergy += static_cast<double>(inputRms * inputRms);
+        outputEnergy += static_cast<double>(outputRms * outputRms);
+    }
+
+    if (inputEnergy <= epsilon || outputEnergy <= epsilon)
+        return;
+
+    const auto targetGain = juce::jlimit(
+        0.82f,
+        1.18f,
+        static_cast<float>(
+            std::sqrt(inputEnergy / outputEnergy)));
+
+    const auto smoothing = highQuality ? 0.10f : 0.18f;
+
+    smoothedOutputGain +=
+        smoothing * (targetGain - smoothedOutputGain);
+
+    for (int channel = 0; channel < activeChannels; ++channel)
+    {
+        juce::FloatVectorOperations::multiply(
+            outputFrames[static_cast<size_t>(channel)].data(),
+            smoothedOutputGain,
+            frameSize);
+    }
 }
 
 float PitchShiftEngine::calculateRms(const float* data, int numSamples) noexcept

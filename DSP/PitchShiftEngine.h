@@ -25,6 +25,7 @@ public:
 private:
     void processAvailableFrames() noexcept;
     void applyStereoEnergyLink() noexcept;
+    void applyOutputGainCompensation() noexcept;
 
     [[nodiscard]] static float calculateRms(const float* data, int numSamples) noexcept;
     [[nodiscard]] static float calculateCorrelation(const float* left,
@@ -37,6 +38,7 @@ private:
     std::array<TransientDetector, SoundShifterDSP::Config::maxChannels> transientDetectors;
     std::array<std::vector<float>, SoundShifterDSP::Config::maxChannels> inputFrames;
     std::array<std::vector<float>, SoundShifterDSP::Config::maxChannels> outputFrames;
+    std::array<float, SoundShifterDSP::Config::maxChannels> transientAmounts {};
     OverlapAdd overlapAdd;
 
     int samplesUntilFrame = SoundShifterDSP::Config::fftSize;
@@ -45,6 +47,7 @@ private:
     float smoothedLeftGain = 1.0f;
     float smoothedRightGain = 1.0f;
     float smoothedSideGain = 1.0f;
+    float smoothedOutputGain = 1.0f;
     bool highQuality = true;
     bool prepared = false;
     int activeChannels = 0;

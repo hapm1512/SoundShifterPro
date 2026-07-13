@@ -44,6 +44,23 @@ namespace SoundShifterDSP
         static constexpr float transientPhaseResetHQ = 0.72f;
         static constexpr float transientPhaseResetFast = 0.48f;
 
+        // Sprint DSP 01C: adaptive transient profile.
+        static constexpr float transientThresholdMinimum = 0.10f;
+        static constexpr float transientThresholdMaximum = 0.42f;
+        static constexpr float transientNoiseSmoothing = 0.08f;
+        static constexpr float transientFluxSmoothing = 0.18f;
+        static constexpr float transientAttack = 0.58f;
+        static constexpr float transientDynamicReleaseMinimum = 0.68f;
+        static constexpr float transientDynamicReleaseMaximum = 0.90f;
+
+        // Sprint DSP 01C: stereo energy profile.
+        static constexpr float stereoGainMinimum = 0.76f;
+        static constexpr float stereoGainMaximum = 1.28f;
+        static constexpr float stereoSideMinimum = 0.90f;
+        static constexpr float stereoSideMaximum = 1.22f;
+        static constexpr float stereoEnergySmoothingHQ = 0.12f;
+        static constexpr float stereoEnergySmoothingFast = 0.22f;
+
         static_assert(fftSize > 0);
         static_assert(hopSize > 0);
         static_assert(fftSize % hopSize == 0);

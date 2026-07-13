@@ -264,8 +264,13 @@ private:
 
     float getImag(int bin) const noexcept
     {
-        if (bin == 0 || bin == SoundShifterDSP::Config::fftSize / 2) return 0.0f;
-        return transformData[static_cast<size_t>(bin * 2 + 1)];
+        const auto isBoundary =
+            bin == 0
+            || bin == SoundShifterDSP::Config::fftSize / 2;
+
+        return isBoundary
+            ? 0.0f
+            : transformData[static_cast<size_t>(bin * 2 + 1)];
     }
 
     void setComplex(int bin, float real, float imag) noexcept
