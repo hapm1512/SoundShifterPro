@@ -213,9 +213,18 @@ void PitchShiftEngine::applyStereoEnergyLink() noexcept
         SoundShifterDSP::Config::stereoGainMaximum,
         targetRightRms / (outputRightRms + epsilon));
 
-    const auto smoothing = highQuality
+    const auto transientInfluence =
+        activeChannels == 2
+            ? 0.5f * (transientAmounts[0] + transientAmounts[1])
+            : transientAmounts[0];
+
+    const auto smoothingBase = highQuality
         ? SoundShifterDSP::Config::stereoEnergySmoothingHQ
         : SoundShifterDSP::Config::stereoEnergySmoothingFast;
+
+    const auto smoothing =
+        juce::jlimit(0.05f,0.35f,
+            smoothingBase * (1.0f - 0.35f * transientInfluence));
 
     smoothedLeftGain += smoothing * (rawLeftGain - smoothedLeftGain);
     smoothedRightGain += smoothing * (rawRightGain - smoothedRightGain);
@@ -298,23 +307,30 @@ void PitchShiftEngine::applyOutputGainCompensation() noexcept
     if (inputEnergy <= epsilon || outputEnergy <= epsilon)
         return;
 
-    const auto targetGain = juce::jlimit(
-        0.82f,
-        1.18f,
-        static_cast<float>(
-            std::sqrt(inputEnergy / outputEnergy)));
+    const auto rawGain =
+        static_cast<float>(std::sqrt(inputEnergy / outputEnergy));
 
-    const auto smoothing = highQuality ? 0.10f : 0.18f;
+    const auto targetGain = juce::jlimit(
+        0.86f,
+        1.14f,
+        rawGain);
+
+    const auto smoothing = highQuality
+        ? 0.08f
+        : 0.15f;
 
     smoothedOutputGain +=
         smoothing * (targetGain - smoothedOutputGain);
 
-    for (int channel = 0; channel < activeChannels; ++channel)
+    if (std::abs(smoothedOutputGain - 1.0f) > 0.0005f)
     {
-        juce::FloatVectorOperations::multiply(
-            outputFrames[static_cast<size_t>(channel)].data(),
-            smoothedOutputGain,
-            frameSize);
+        for (int channel = 0; channel < activeChannels; ++channel)
+        {
+            juce::FloatVectorOperations::multiply(
+                outputFrames[static_cast<size_t>(channel)].data(),
+                smoothedOutputGain,
+                frameSize);
+        }
     }
 }
 
