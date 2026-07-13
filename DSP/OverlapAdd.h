@@ -36,17 +36,18 @@ public:
             accumulation.getNumChannels()));
         jassert(frame != nullptr);
 
-        auto* destination =
+        auto* const destination =
             accumulation.getWritePointer(channel);
 
         constexpr auto frameSize =
             SoundShifterDSP::Config::fftSize;
 
+        const auto currentRead = readPosition;
         const auto firstBlock =
-            frameSize - readPosition;
+            frameSize - currentRead;
 
         juce::FloatVectorOperations::add(
-            destination + readPosition,
+            destination + currentRead,
             frame,
             firstBlock);
 
@@ -55,7 +56,7 @@ public:
             juce::FloatVectorOperations::add(
                 destination,
                 frame + firstBlock,
-                readPosition);
+                currentRead);
         }
     }
 
@@ -65,20 +66,21 @@ public:
             channel,
             accumulation.getNumChannels()));
 
-        auto* samples =
+        auto* const samples =
             accumulation.getWritePointer(channel);
 
-        const auto value = samples[readPosition];
-        samples[readPosition] = 0.0f;
+        const auto currentRead = readPosition;
+        const auto value = samples[currentRead];
+        samples[currentRead] = 0.0f;
         return value;
     }
 
     void advance() noexcept
     {
-        ++readPosition;
-
-        if (readPosition == SoundShifterDSP::Config::fftSize)
-            readPosition = 0;
+        readPosition += 1;
+        readPosition -= (readPosition == SoundShifterDSP::Config::fftSize)
+                            ? SoundShifterDSP::Config::fftSize
+                            : 0;
     }
 
 private:
