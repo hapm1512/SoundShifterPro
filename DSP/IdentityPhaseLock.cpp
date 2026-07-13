@@ -200,12 +200,24 @@ void IdentityPhaseLock::apply(float* synthesisPhase,
         const auto harmonicWeight =
             1.0f - juce::jlimit(0.0f, 1.0f, magnitudeRatio);
 
+        const auto ownerPreviousIndex =
+            findPreviousPeak(ownerPeak);
+
+        const auto phaseContinuity =
+            ownerPreviousIndex >= 0
+                ? calculateTrackingBlend(
+                      ownerPeak,
+                      ownerPreviousIndex,
+                      ownerMagnitude)
+                : 0.55f;
+
         const auto lockStrength = juce::jlimit(
-            0.55f,
-            0.97f,
-            0.62f
-                + 0.24f * distanceWeight
-                + 0.08f * harmonicWeight);
+            0.58f,
+            0.98f,
+            0.60f
+                + 0.20f * distanceWeight
+                + 0.08f * harmonicWeight
+                + 0.10f * phaseContinuity);
 
         const auto currentPhase = synthesisPhase[bin];
 
