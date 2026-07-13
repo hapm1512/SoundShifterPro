@@ -55,6 +55,18 @@ public:
     void setPitchSemitones(float semitones);
     [[nodiscard]] float getPitchSemitones() const noexcept;
 
+    void setMix(float percent);
+    [[nodiscard]] float getMix() const noexcept;
+
+    void setOutputGain(float decibels);
+    [[nodiscard]] float getOutputGain() const noexcept;
+
+    void setHighQuality(bool enabled);
+    [[nodiscard]] bool getHighQuality() const noexcept;
+
+    void setBypass(bool enabled);
+    [[nodiscard]] bool getBypass() const noexcept;
+
     void beginMidiLearn(MidiLearnTarget target) noexcept;
     void cancelMidiLearn() noexcept;
     [[nodiscard]] bool isMidiLearning() const noexcept;
@@ -67,6 +79,7 @@ private:
     void handleMidiControl(const juce::MidiBuffer& midiMessages);
     void changePitchBySemitones(float amount);
     void setPitchFromMidi(float semitones);
+    void setParameterValue(const char* parameterId, float plainValue);
 
     void prepareDryDelay(int channels, int maximumBlockSize);
     void createDelayedDry(const juce::AudioBuffer<float>& input, int numSamples);

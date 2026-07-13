@@ -443,6 +443,73 @@ float SoundShifterProAudioProcessor::getPitchSemitones() const noexcept
         : 0.0f;
 }
 
+void SoundShifterProAudioProcessor::setMix(float percent)
+{
+    setParameterValue(
+        ParameterIDs::mix,
+        juce::jlimit(0.0f, 100.0f, percent));
+}
+
+float SoundShifterProAudioProcessor::getMix() const noexcept
+{
+    return mixParameter != nullptr
+        ? mixParameter->load()
+        : 100.0f;
+}
+
+void SoundShifterProAudioProcessor::setOutputGain(float decibels)
+{
+    setParameterValue(
+        ParameterIDs::output,
+        juce::jlimit(-24.0f, 12.0f, decibels));
+}
+
+float SoundShifterProAudioProcessor::getOutputGain() const noexcept
+{
+    return outputParameter != nullptr
+        ? outputParameter->load()
+        : 0.0f;
+}
+
+void SoundShifterProAudioProcessor::setHighQuality(bool enabled)
+{
+    setParameterValue(
+        ParameterIDs::hq,
+        enabled ? 1.0f : 0.0f);
+}
+
+bool SoundShifterProAudioProcessor::getHighQuality() const noexcept
+{
+    return hqParameter == nullptr
+        || hqParameter->load() > 0.5f;
+}
+
+void SoundShifterProAudioProcessor::setBypass(bool enabled)
+{
+    setParameterValue(
+        ParameterIDs::bypass,
+        enabled ? 1.0f : 0.0f);
+}
+
+bool SoundShifterProAudioProcessor::getBypass() const noexcept
+{
+    return bypassParameter != nullptr
+        && bypassParameter->load() > 0.5f;
+}
+
+void SoundShifterProAudioProcessor::setParameterValue(
+    const char* parameterId,
+    float plainValue)
+{
+    if (auto* parameter = apvts.getParameter(parameterId))
+    {
+        parameter->beginChangeGesture();
+        parameter->setValueNotifyingHost(
+            parameter->convertTo0to1(plainValue));
+        parameter->endChangeGesture();
+    }
+}
+
 void SoundShifterProAudioProcessor::beginMidiLearn(
     MidiLearnTarget target) noexcept
 {
