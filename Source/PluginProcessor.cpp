@@ -225,7 +225,17 @@ void SoundShifterProAudioProcessor::processBlock(
         requestedMix,
         bypassed);
 
+    static bool lastBypassState = false;
+
+    if (lastBypassState != bypassed)
+    {
+        bypassWetSmoothed.reset(currentSampleRate.load(), 0.02);
+        bypassWetSmoothed.setTargetValue(bypassed ? 0.0f : 1.0f);
+        lastBypassState = bypassed;
+    }
+
     applyOutputGain(buffer, numSamples);
+
     if (highQuality || (numSamples >= 128))
         updateMeters(buffer, false);
 }
