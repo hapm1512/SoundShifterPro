@@ -75,10 +75,12 @@ public:
 
         window.setHighQuality(highQuality);
 
-        juce::FloatVectorOperations::clear(transformData.data(), fftSize * 2);
-        juce::FloatVectorOperations::copy(transformData.data(), input, fftSize);
-        window.applyAnalysis(transformData.data(), fftSize);
-        fft->performRealOnlyForwardTransform(transformData.data());
+        auto* const fftBuffer = transformData.data();
+
+        juce::FloatVectorOperations::clear(fftBuffer, fftSize * 2);
+        juce::FloatVectorOperations::copy(fftBuffer, input, fftSize);
+        window.applyAnalysis(fftBuffer, fftSize);
+        fft->performRealOnlyForwardTransform(fftBuffer);
 
         std::fill(synthesisMagnitude.begin(), synthesisMagnitude.end(), 0.0f);
         std::fill(synthesisFrequency.begin(), synthesisFrequency.end(), 0.0f);
@@ -176,7 +178,7 @@ public:
             synthesisMagnitude,
             highQuality);
 
-        juce::FloatVectorOperations::clear(transformData.data(), fftSize * 2);
+        juce::FloatVectorOperations::clear(fftBuffer, fftSize * 2);
 
         for (int bin = 0; bin < numBins; ++bin)
         {
@@ -237,9 +239,9 @@ public:
             setComplex(bin, magnitude * std::cos(phase), magnitude * std::sin(phase));
         }
 
-        fft->performRealOnlyInverseTransform(transformData.data());
-        window.applySynthesis(transformData.data(), fftSize);
-        juce::FloatVectorOperations::copy(output, transformData.data(), fftSize);
+        fft->performRealOnlyInverseTransform(fftBuffer);
+        window.applySynthesis(fftBuffer, fftSize);
+        juce::FloatVectorOperations::copy(output, fftBuffer, fftSize);
     }
 
     [[nodiscard]] int getPeakCount() const noexcept
@@ -965,10 +967,14 @@ private:
         if (!juce::isPositiveAndBelow(bin, numBins) || weightedMagnitude <= 0.0f)
             return;
 
-        synthesisMagnitude[static_cast<size_t>(bin)] += weightedMagnitude;
-        synthesisFrequency[static_cast<size_t>(bin)] += weightedMagnitude * shiftedFrequency;
-        synthesisPhaseReal[static_cast<size_t>(bin)] += weightedMagnitude * std::cos(sourcePhase);
-        synthesisPhaseImag[static_cast<size_t>(bin)] += weightedMagnitude * std::sin(sourcePhase);
+        const auto idx = static_cast<size_t>(bin);
+        const auto cosPhase = std::cos(sourcePhase);
+        const auto sinPhase = std::sin(sourcePhase);
+
+        synthesisMagnitude[idx] += weightedMagnitude;
+        synthesisFrequency[idx] += weightedMagnitude * shiftedFrequency;
+        synthesisPhaseReal[idx] += weightedMagnitude * cosPhase;
+        synthesisPhaseImag[idx] += weightedMagnitude * sinPhase;
     }
 
     std::unique_ptr<juce::dsp::FFT> fft;
