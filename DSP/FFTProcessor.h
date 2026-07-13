@@ -27,6 +27,7 @@ public:
         synthesisPhaseImag.assign(static_cast<size_t>(numBins), 0.0f);
         adaptiveMagnitude.assign(static_cast<size_t>(numBins), 0.0f);
         spectralEnvelope.assign(static_cast<size_t>(numBins), 0.0f);
+        leakageCompensatedMagnitude.assign(static_cast<size_t>(numBins), 0.0f);
         mappedAnalysisPhase.assign(static_cast<size_t>(numBins), 0.0f);
         outputPhase.assign(static_cast<size_t>(numBins), 0.0f);
         peakDetector.prepare(numBins);
@@ -48,6 +49,9 @@ public:
         std::fill(synthesisPhaseImag.begin(), synthesisPhaseImag.end(), 0.0f);
         std::fill(adaptiveMagnitude.begin(), adaptiveMagnitude.end(), 0.0f);
         std::fill(spectralEnvelope.begin(), spectralEnvelope.end(), 0.0f);
+        std::fill(leakageCompensatedMagnitude.begin(),
+                  leakageCompensatedMagnitude.end(),
+                  0.0f);
         std::fill(mappedAnalysisPhase.begin(), mappedAnalysisPhase.end(), 0.0f);
         std::fill(outputPhase.begin(), outputPhase.end(), 0.0f);
         peakDetector.reset();
@@ -88,6 +92,9 @@ public:
         std::fill(synthesisPhaseImag.begin(), synthesisPhaseImag.end(), 0.0f);
         std::fill(adaptiveMagnitude.begin(), adaptiveMagnitude.end(), 0.0f);
         std::fill(spectralEnvelope.begin(), spectralEnvelope.end(), 0.0f);
+        std::fill(leakageCompensatedMagnitude.begin(),
+                  leakageCompensatedMagnitude.end(),
+                  0.0f);
         std::fill(mappedAnalysisPhase.begin(), mappedAnalysisPhase.end(), 0.0f);
         std::fill(outputPhase.begin(), outputPhase.end(), 0.0f);
 
@@ -113,6 +120,11 @@ public:
         peakDetector.detect(analysisMagnitude.data(), numBins);
 
         prepareAdaptiveSpectrum(
+            safeRatio,
+            safeTransient,
+            highQuality);
+
+        applySpectralLeakageCompensation(
             safeRatio,
             safeTransient,
             highQuality);
@@ -143,7 +155,7 @@ public:
                     highQuality);
 
             const auto magnitude =
-                adaptiveMagnitude[static_cast<size_t>(sourceBin)]
+                leakageCompensatedMagnitude[static_cast<size_t>(sourceBin)]
                 * enhancement
                 * binWeight;
 
@@ -362,6 +374,152 @@ private:
         }
     }
 
+    void applySpectralLeakageCompensation(float pitchRatio,
+                                            float transientAmount,
+                                            bool highQuality) noexcept
+    {
+        if (!highQuality)
+        {
+            juce::FloatVectorOperations::copy(
+                leakageCompensatedMagnitude.data(),
+                adaptiveMagnitude.data(),
+                numBins);
+            return;
+        }
+
+        const auto shiftDistance = juce::jlimit(
+            0.0f,
+            1.0f,
+            std::abs(std::log2(pitchRatio)));
+
+        const auto transientProtection =
+            1.0f - 0.82f * transientAmount;
+
+        for (int bin = 0; bin < numBins; ++bin)
+        {
+            const auto centre =
+                adaptiveMagnitude[static_cast<size_t>(bin)];
+
+            if (bin <= 1 || bin >= numBins - 2 || centre <= 1.0e-12f)
+            {
+                leakageCompensatedMagnitude[static_cast<size_t>(bin)] = centre;
+                continue;
+            }
+
+            const auto left1 =
+                adaptiveMagnitude[static_cast<size_t>(bin - 1)];
+
+            const auto right1 =
+                adaptiveMagnitude[static_cast<size_t>(bin + 1)];
+
+            const auto left2 =
+                adaptiveMagnitude[static_cast<size_t>(bin - 2)];
+
+            const auto right2 =
+                adaptiveMagnitude[static_cast<size_t>(bin + 2)];
+
+            const auto neighbourAverage =
+                0.40f * (left1 + right1)
+                + 0.10f * (left2 + right2);
+
+            const auto localPeak =
+                centre >= left1 && centre >= right1;
+
+            const auto sideLobeRatio = juce::jlimit(
+                0.0f,
+                1.0f,
+                neighbourAverage / (centre + neighbourAverage + 1.0e-12f));
+
+            const auto normalisedBin =
+                static_cast<float>(bin)
+                / static_cast<float>(numBins - 1);
+
+            const auto highBandFactor = juce::jlimit(
+                0.0f,
+                1.0f,
+                (normalisedBin - 0.55f) / 0.45f);
+
+            const auto compensationStrength =
+                (0.10f + 0.10f * highBandFactor)
+                * shiftDistance
+                * transientProtection;
+
+            auto corrected = centre;
+
+            if (localPeak)
+            {
+                const auto peakSharpening =
+                    compensationStrength
+                    * (1.0f - sideLobeRatio)
+                    * centre;
+
+                corrected += peakSharpening;
+            }
+            else
+            {
+                const auto suppression =
+                    compensationStrength
+                    * sideLobeRatio
+                    * juce::jmin(centre, neighbourAverage);
+
+                corrected -= suppression;
+            }
+
+            const auto continuityReference =
+                0.50f * centre
+                + 0.25f * (left1 + right1);
+
+            const auto continuityBlend =
+                0.05f
+                * shiftDistance
+                * transientProtection
+                * (1.0f - highBandFactor * 0.35f);
+
+            corrected = juce::jmap(
+                continuityBlend,
+                corrected,
+                continuityReference);
+
+            leakageCompensatedMagnitude[static_cast<size_t>(bin)] =
+                juce::jmax(0.0f, corrected);
+        }
+
+        preserveLeakageEnergy();
+    }
+
+    void preserveLeakageEnergy() noexcept
+    {
+        double inputEnergy = 0.0;
+        double outputEnergy = 0.0;
+
+        for (int bin = 0; bin < numBins; ++bin)
+        {
+            const auto input =
+                static_cast<double>(
+                    adaptiveMagnitude[static_cast<size_t>(bin)]);
+
+            const auto output =
+                static_cast<double>(
+                    leakageCompensatedMagnitude[static_cast<size_t>(bin)]);
+
+            inputEnergy += input * input;
+            outputEnergy += output * output;
+        }
+
+        if (inputEnergy <= 1.0e-18 || outputEnergy <= 1.0e-18)
+            return;
+
+        const auto gain = juce::jlimit(
+            0.94f,
+            1.06f,
+            static_cast<float>(std::sqrt(inputEnergy / outputEnergy)));
+
+        juce::FloatVectorOperations::multiply(
+            leakageCompensatedMagnitude.data(),
+            gain,
+            numBins);
+    }
+
     [[nodiscard]] float calculatePeakInterpolationOffset(int bin) const noexcept
     {
         if (bin <= 0 || bin >= numBins - 1)
@@ -508,6 +666,7 @@ private:
     std::vector<float> synthesisPhaseImag;
     std::vector<float> adaptiveMagnitude;
     std::vector<float> spectralEnvelope;
+    std::vector<float> leakageCompensatedMagnitude;
     std::vector<float> mappedAnalysisPhase;
     std::vector<float> outputPhase;
     PeakDetector peakDetector;
