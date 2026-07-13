@@ -135,8 +135,17 @@ public:
             const auto enhancement =
                 calculateHarmonicEnhancement(sourceBin, safeRatio, highQuality);
 
+            const auto binWeight =
+                calculateAdaptiveBinWeight(
+                    sourceBin,
+                    safeRatio,
+                    safeTransient,
+                    highQuality);
+
             const auto magnitude =
-                adaptiveMagnitude[static_cast<size_t>(sourceBin)] * enhancement;
+                adaptiveMagnitude[static_cast<size_t>(sourceBin)]
+                * enhancement
+                * binWeight;
 
             addToSynthesisBin(
                 targetBin,
@@ -372,6 +381,79 @@ private:
 
         const auto offset = 0.5f * (left - right) / denominator;
         return juce::jlimit(-0.5f, 0.5f, offset);
+    }
+
+    [[nodiscard]] float calculateAdaptiveBinWeight(
+        int bin,
+        float pitchRatio,
+        float transientAmount,
+        bool highQuality) const noexcept
+    {
+        if (!highQuality || bin <= 0 || bin >= numBins - 1)
+            return 1.0f;
+
+        const auto magnitude =
+            analysisMagnitude[static_cast<size_t>(bin)];
+
+        if (magnitude <= 1.0e-12f)
+            return 1.0f;
+
+        const auto left =
+            analysisMagnitude[static_cast<size_t>(bin - 1)];
+
+        const auto right =
+            analysisMagnitude[static_cast<size_t>(bin + 1)];
+
+        const auto localMaximum = juce::jmax(left, right);
+        const auto peakDominance = juce::jlimit(
+            0.0f,
+            1.0f,
+            (magnitude - localMaximum) / (magnitude + 1.0e-12f));
+
+        const auto envelope =
+            spectralEnvelope[static_cast<size_t>(bin)];
+
+        const auto envelopeRatio = juce::jlimit(
+            0.0f,
+            2.0f,
+            magnitude / (envelope + 1.0e-12f));
+
+        const auto tonalConfidence = juce::jlimit(
+            0.0f,
+            1.0f,
+            0.55f * peakDominance
+                + 0.45f * juce::jlimit(0.0f, 1.0f, envelopeRatio - 0.65f));
+
+        const auto normalisedBin =
+            static_cast<float>(bin) / static_cast<float>(numBins - 1);
+
+        const auto shiftDistance = juce::jlimit(
+            0.0f,
+            1.0f,
+            std::abs(std::log2(pitchRatio)));
+
+        const auto transientProtection =
+            1.0f - 0.70f * transientAmount;
+
+        const auto highBandProtection =
+            1.0f - 0.35f * juce::jlimit(
+                0.0f,
+                1.0f,
+                (normalisedBin - 0.72f) / 0.28f);
+
+        const auto tonalBoost =
+            0.10f * tonalConfidence * shiftDistance * transientProtection;
+
+        const auto noiseSuppression =
+            0.08f * (1.0f - tonalConfidence)
+            * shiftDistance
+            * transientProtection
+            * highBandProtection;
+
+        return juce::jlimit(
+            0.92f,
+            1.10f,
+            1.0f + tonalBoost - noiseSuppression);
     }
 
     [[nodiscard]] static float calculateHarmonicEnhancement(
