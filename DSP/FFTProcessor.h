@@ -99,7 +99,8 @@ public:
         {
             const auto real = getReal(bin);
             const auto imag = getImag(bin);
-            const auto magnitude = std::sqrt(real * real + imag * imag);
+            const auto mag2 = real * real + imag * imag;
+            const auto magnitude = std::sqrt(mag2);
             const auto phase = std::atan2(imag, real);
 
             auto phaseDelta = phase - lastPhase[static_cast<size_t>(bin)];
@@ -138,8 +139,10 @@ public:
             const auto targetBin = static_cast<int>(std::floor(targetPosition));
             const auto fraction = targetPosition - static_cast<float>(targetBin);
 
+            const auto sourceFrequency =
+                analysisFrequency[static_cast<size_t>(sourceBin)];
             const auto shiftedFrequency =
-                analysisFrequency[static_cast<size_t>(sourceBin)] * safeRatio;
+                sourceFrequency * safeRatio;
 
             const auto enhancement =
                 calculateHarmonicEnhancement(sourceBin, safeRatio, highQuality);
@@ -191,7 +194,8 @@ public:
                 frequency = static_cast<float>(bin) * frequencyPerBin;
 
             const auto binDeviation = frequency / frequencyPerBin - static_cast<float>(bin);
-            const auto phaseIncrement = (static_cast<float>(bin) + binDeviation) * expectedPhase;
+            const auto phaseIncrement =
+                expectedPhase * (static_cast<float>(bin) + binDeviation);
             sumPhase[static_cast<size_t>(bin)] += phaseIncrement;
             outputPhase[static_cast<size_t>(bin)] = sumPhase[static_cast<size_t>(bin)];
 
@@ -236,7 +240,9 @@ public:
         {
             const auto magnitude = synthesisMagnitude[static_cast<size_t>(bin)];
             const auto phase = outputPhase[static_cast<size_t>(bin)];
-            setComplex(bin, magnitude * std::cos(phase), magnitude * std::sin(phase));
+            const auto c = std::cos(phase);
+            const auto s = std::sin(phase);
+            setComplex(bin, magnitude * c, magnitude * s);
         }
 
         fft->performRealOnlyInverseTransform(fftBuffer);
