@@ -26,14 +26,14 @@ public:
     {
         jassert(capacity > 0);
 
-        data[static_cast<size_t>(writeIndex)] = sample;
+        auto index = writeIndex;
+        data[static_cast<size_t>(index)] = sample;
 
-        ++writeIndex;
+        ++index;
+        index -= (index == capacity) ? capacity : 0;
+        writeIndex = index;
 
-        if (writeIndex == capacity)
-            writeIndex = 0;
-
-        if (validSamples < capacity)
+        if (validSamples != capacity)
             ++validSamples;
     }
 
@@ -49,10 +49,8 @@ public:
         jassert(numberOfSamples <= validSamples);
         jassert(numberOfSamples <= capacity);
 
-        auto start = writeIndex - numberOfSamples;
-
-        if (start < 0)
-            start += capacity;
+        int start = writeIndex - numberOfSamples;
+        start += (start < 0) ? capacity : 0;
 
         const auto firstBlock =
             juce::jmin(numberOfSamples, capacity - start);
@@ -62,10 +60,9 @@ public:
             data.data() + start,
             firstBlock);
 
-        const auto remaining =
-            numberOfSamples - firstBlock;
+        const int remaining = numberOfSamples - firstBlock;
 
-        if (remaining > 0)
+        if (remaining != 0)
         {
             juce::FloatVectorOperations::copy(
                 destination + firstBlock,
