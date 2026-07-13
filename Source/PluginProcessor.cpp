@@ -416,6 +416,33 @@ void SoundShifterProAudioProcessor::updateMeters(
     }
 }
 
+void SoundShifterProAudioProcessor::toneUp()
+{
+    changePitchBySemitones(1.0f);
+}
+
+void SoundShifterProAudioProcessor::toneDown()
+{
+    changePitchBySemitones(-1.0f);
+}
+
+void SoundShifterProAudioProcessor::toneReset()
+{
+    setPitchFromMidi(0.0f);
+}
+
+void SoundShifterProAudioProcessor::setPitchSemitones(float semitones)
+{
+    setPitchFromMidi(semitones);
+}
+
+float SoundShifterProAudioProcessor::getPitchSemitones() const noexcept
+{
+    return pitchParameter != nullptr
+        ? pitchParameter->load()
+        : 0.0f;
+}
+
 void SoundShifterProAudioProcessor::beginMidiLearn(
     MidiLearnTarget target) noexcept
 {

@@ -49,6 +49,12 @@ public:
     float getOutputRightDb() const noexcept { return outputRightDb.load(); }
     double getCurrentSampleRateHz() const noexcept { return currentSampleRate.load(); }
 
+    void toneUp();
+    void toneDown();
+    void toneReset();
+    void setPitchSemitones(float semitones);
+    [[nodiscard]] float getPitchSemitones() const noexcept;
+
     void beginMidiLearn(MidiLearnTarget target) noexcept;
     void cancelMidiLearn() noexcept;
     [[nodiscard]] bool isMidiLearning() const noexcept;
