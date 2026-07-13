@@ -819,8 +819,14 @@ private:
                 ? 0.82f + 0.14f * shiftDistance
                 : 0.58f + 0.10f * shiftDistance;
 
+        const auto transientRecovery =
+            1.0f - 0.30f * shiftDistance * (1.0f - peakFocus);
+
         const auto transientFocus =
-            juce::jmap(transientAmount, peakFocus, 0.96f);
+            juce::jmap(
+                transientAmount,
+                peakFocus * transientRecovery,
+                0.97f);
 
         const auto cubicLeft =
             0.5f * std::pow(1.0f - fraction, 2.0f);
@@ -837,10 +843,14 @@ private:
         auto w1 = fraction * transientFocus
                 + cubicRight * (1.0f - transientFocus);
 
+        const auto preEchoReduction =
+            1.0f - 0.25f * transientAmount;
+
         auto wMinus = (1.0f - transientFocus)
                     * cubicCentre
                     * (1.0f - fraction)
-                    * 0.18f;
+                    * 0.18f
+                    * preEchoReduction;
 
         auto wPlus = (1.0f - transientFocus)
                    * cubicCentre
