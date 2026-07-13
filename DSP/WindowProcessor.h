@@ -29,11 +29,16 @@ public:
 
         normaliseSynthesisWindow(fastAnalysis, fastSynthesis);
         normaliseSynthesisWindow(hqAnalysis, hqSynthesis);
+        updateSelectedCoefficients();
     }
 
     void setHighQuality(bool shouldUseHighQuality) noexcept
     {
-        highQuality = shouldUseHighQuality;
+        if (highQuality != shouldUseHighQuality)
+        {
+            highQuality = shouldUseHighQuality;
+            updateSelectedCoefficients();
+        }
     }
 
     void applyAnalysis(float* samples, int numberOfSamples) const noexcept
@@ -41,11 +46,9 @@ public:
         jassert(samples != nullptr);
         jassert(numberOfSamples == size);
 
-        const auto* coefficients = getAnalysisCoefficients();
-
         juce::FloatVectorOperations::multiply(
             samples,
-            coefficients,
+            selectedAnalysis,
             numberOfSamples);
     }
 
@@ -54,11 +57,9 @@ public:
         jassert(samples != nullptr);
         jassert(numberOfSamples == size);
 
-        const auto* coefficients = getSynthesisCoefficients();
-
         juce::FloatVectorOperations::multiply(
             samples,
-            coefficients,
+            selectedSynthesis,
             numberOfSamples);
     }
 
@@ -68,14 +69,15 @@ public:
     }
 
 private:
-    [[nodiscard]] const float* getAnalysisCoefficients() const noexcept
+    void updateSelectedCoefficients() noexcept
     {
-        return highQuality ? hqAnalysis.data() : fastAnalysis.data();
-    }
+        selectedAnalysis = highQuality
+            ? hqAnalysis.data()
+            : fastAnalysis.data();
 
-    [[nodiscard]] const float* getSynthesisCoefficients() const noexcept
-    {
-        return highQuality ? hqSynthesis.data() : fastSynthesis.data();
+        selectedSynthesis = highQuality
+            ? hqSynthesis.data()
+            : fastSynthesis.data();
     }
 
     void normaliseSynthesisWindow(const std::vector<float>& analysis,
@@ -112,6 +114,8 @@ private:
     std::vector<float> hqAnalysis;
     std::vector<float> hqSynthesis;
 
+    const float* selectedAnalysis = nullptr;
+    const float* selectedSynthesis = nullptr;
     int size = 0;
     bool highQuality = true;
 };

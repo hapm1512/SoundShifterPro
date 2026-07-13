@@ -61,6 +61,12 @@ namespace SoundShifterDSP
         static constexpr float stereoEnergySmoothingHQ = 0.12f;
         static constexpr float stereoEnergySmoothingFast = 0.22f;
 
+        // Epic 3F.1: SIMD/cache foundation.
+        static constexpr int simdAlignmentBytes = 32;
+        static constexpr int preferredVectorWidth = 8;
+        static constexpr int cacheLineBytes = 64;
+        static constexpr bool enableVectorOperations = true;
+
         static_assert(fftSize > 0);
         static_assert(hopSize > 0);
         static_assert(fftSize % hopSize == 0);

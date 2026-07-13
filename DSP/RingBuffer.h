@@ -14,7 +14,10 @@ public:
 
     void reset() noexcept
     {
-        std::fill(data.begin(), data.end(), 0.0f);
+        juce::FloatVectorOperations::clear(
+            data.data(),
+            capacity);
+
         writeIndex = 0;
         validSamples = 0;
     }
@@ -22,9 +25,16 @@ public:
     void push(float sample) noexcept
     {
         jassert(capacity > 0);
+
         data[static_cast<size_t>(writeIndex)] = sample;
-        writeIndex = (writeIndex + 1) % capacity;
-        validSamples = juce::jmin(validSamples + 1, capacity);
+
+        ++writeIndex;
+
+        if (writeIndex == capacity)
+            writeIndex = 0;
+
+        if (validSamples < capacity)
+            ++validSamples;
     }
 
     [[nodiscard]] bool isFull() const noexcept
@@ -32,24 +42,36 @@ public:
         return validSamples == capacity;
     }
 
-    void copyOldestToNewest(float* destination, int numberOfSamples) const noexcept
+    void copyOldestToNewest(float* destination,
+                            int numberOfSamples) const noexcept
     {
         jassert(destination != nullptr);
         jassert(numberOfSamples <= validSamples);
         jassert(numberOfSamples <= capacity);
 
-        const auto start = (writeIndex - numberOfSamples + capacity) % capacity;
-        const auto firstBlock = juce::jmin(numberOfSamples, capacity - start);
+        auto start = writeIndex - numberOfSamples;
 
-        juce::FloatVectorOperations::copy(destination,
-                                          data.data() + start,
-                                          firstBlock);
+        if (start < 0)
+            start += capacity;
 
-        const auto remaining = numberOfSamples - firstBlock;
+        const auto firstBlock =
+            juce::jmin(numberOfSamples, capacity - start);
+
+        juce::FloatVectorOperations::copy(
+            destination,
+            data.data() + start,
+            firstBlock);
+
+        const auto remaining =
+            numberOfSamples - firstBlock;
+
         if (remaining > 0)
-            juce::FloatVectorOperations::copy(destination + firstBlock,
-                                              data.data(),
-                                              remaining);
+        {
+            juce::FloatVectorOperations::copy(
+                destination + firstBlock,
+                data.data(),
+                remaining);
+        }
     }
 
 private:
