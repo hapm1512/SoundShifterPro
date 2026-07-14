@@ -30,6 +30,7 @@ private:
     void processAvailableFrames() noexcept;
     void applyStereoEnergyLink() noexcept;
     void applyOutputGainCompensation() noexcept;
+    void updatePitchRatio() noexcept;
 
     [[nodiscard]] static float calculateRms(const float* data, int numSamples) noexcept;
     [[nodiscard]] static float calculateCorrelation(const float* left,

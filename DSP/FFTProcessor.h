@@ -829,14 +829,17 @@ private:
                 peakFocus * transientRecovery,
                 0.97f);
 
+        const auto inverseFraction = 1.0f - fraction;
+        const auto centredFraction = fraction - 0.5f;
+
         const auto cubicLeft =
-            0.5f * std::pow(1.0f - fraction, 2.0f);
+            0.5f * inverseFraction * inverseFraction;
 
         const auto cubicCentre =
-            0.75f - std::pow(fraction - 0.5f, 2.0f);
+            0.75f - centredFraction * centredFraction;
 
         const auto cubicRight =
-            0.5f * std::pow(fraction, 2.0f);
+            0.5f * fraction * fraction;
 
         auto w0 = (1.0f - fraction) * transientFocus
                 + cubicLeft * (1.0f - transientFocus);

@@ -25,9 +25,9 @@ public:
     void paint(juce::Graphics& g) override
     {
         auto bounds = getLocalBounds().toFloat();
-        drawChannel(g, bounds.removeFromTop(bounds.getHeight() * 0.42f), left, "L");
+        drawChannel(g, bounds.removeFromTop(bounds.getHeight() * 0.42f), left, 'L');
         bounds.removeFromTop(4.0f);
-        drawChannel(g, bounds, right, "R");
+        drawChannel(g, bounds, right, 'R');
     }
 
 private:
@@ -39,12 +39,12 @@ private:
     void drawChannel(juce::Graphics& g,
                      juce::Rectangle<float> area,
                      float db,
-                     const juce::String& name)
+                     juce::juce_wchar name)
     {
         auto label = area.removeFromLeft(14.0f);
         g.setColour(SoundShifterTheme::textMuted);
         g.setFont(9.0f);
-        g.drawText(name, label, juce::Justification::centredLeft);
+        g.drawText(juce::String::charToString(name), label, juce::Justification::centredLeft);
 
         auto track = area.reduced(1.0f, 2.0f);
         g.setColour(SoundShifterTheme::meterTrack);

@@ -53,7 +53,7 @@ void PitchShiftEngine::setPitchSemitones(float newSemitones) noexcept
     if (pitchSemitones != clamped)
     {
         pitchSemitones = clamped;
-        pitchRatio = std::pow(2.0f, (pitchSemitones + fineCents * 0.01f) / 12.0f);
+        updatePitchRatio();
     }
 }
 
@@ -64,8 +64,16 @@ void PitchShiftEngine::setFineCents(float newCents) noexcept
     if (fineCents != clamped)
     {
         fineCents = clamped;
-        pitchRatio = std::pow(2.0f, (pitchSemitones + fineCents * 0.01f) / 12.0f);
+        updatePitchRatio();
     }
+}
+
+void PitchShiftEngine::updatePitchRatio() noexcept
+{
+    constexpr float centsToSemitones = 0.01f;
+    constexpr float semitonesPerOctave = 12.0f;
+    const auto totalSemitones = pitchSemitones + fineCents * centsToSemitones;
+    pitchRatio = std::exp2(totalSemitones / semitonesPerOctave);
 }
 
 void PitchShiftEngine::setHighQuality(bool shouldUseHighQuality) noexcept
