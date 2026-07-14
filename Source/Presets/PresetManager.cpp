@@ -403,6 +403,106 @@ int PresetManager::getActiveHistorySnapshot() const noexcept
     return activeHistorySnapshot;
 }
 
+
+void PresetManager::pushUndoState()
+{
+    if (restoringUndoState)
+        return;
+
+    auto current = apvts.copyState();
+    if (!current.isValid())
+        return;
+
+    if (!undoStates.empty() && undoStates.back().isEquivalentTo(current))
+        return;
+
+    undoStates.push_back(current.createCopy());
+    if (static_cast<int>(undoStates.size()) > maximumUndoSteps)
+        undoStates.erase(undoStates.begin());
+
+    redoStates.clear();
+}
+
+bool PresetManager::undo()
+{
+    if (undoStates.empty())
+        return false;
+
+    const auto current = apvts.copyState();
+    auto target = undoStates.back().createCopy();
+    undoStates.pop_back();
+
+    restoringUndoState = true;
+    const auto restored = restoreSnapshot(target);
+    restoringUndoState = false;
+
+    if (!restored)
+    {
+        undoStates.push_back(target);
+        return false;
+    }
+
+    redoStates.push_back(current.createCopy());
+    if (static_cast<int>(redoStates.size()) > maximumUndoSteps)
+        redoStates.erase(redoStates.begin());
+
+    activeHistorySnapshot = -1;
+    return true;
+}
+
+bool PresetManager::redo()
+{
+    if (redoStates.empty())
+        return false;
+
+    const auto current = apvts.copyState();
+    auto target = redoStates.back().createCopy();
+    redoStates.pop_back();
+
+    restoringUndoState = true;
+    const auto restored = restoreSnapshot(target);
+    restoringUndoState = false;
+
+    if (!restored)
+    {
+        redoStates.push_back(target);
+        return false;
+    }
+
+    undoStates.push_back(current.createCopy());
+    if (static_cast<int>(undoStates.size()) > maximumUndoSteps)
+        undoStates.erase(undoStates.begin());
+
+    activeHistorySnapshot = -1;
+    return true;
+}
+
+void PresetManager::clearUndoHistory()
+{
+    undoStates.clear();
+    redoStates.clear();
+}
+
+bool PresetManager::canUndo() const noexcept
+{
+    return !undoStates.empty();
+}
+
+bool PresetManager::canRedo() const noexcept
+{
+    return !redoStates.empty();
+}
+
+int PresetManager::getUndoStepCount() const noexcept
+{
+    return static_cast<int>(undoStates.size());
+}
+
+int PresetManager::getRedoStepCount() const noexcept
+{
+    return static_cast<int>(redoStates.size());
+}
+
 juce::String PresetManager::getCurrentPresetName() const { return currentPresetName; }
 juce::File PresetManager::getPresetDirectory() const { return presetDirectory; }
 

@@ -87,6 +87,23 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
         updateSnapshotHistoryButtons();
     };
 
+    addAndMakeVisible(undoButton);
+    addAndMakeVisible(redoButton);
+    addAndMakeVisible(undoHistoryLabel);
+
+    undoHistoryLabel.setFont(SoundShifterTheme::labelFont(9.0f));
+    undoHistoryLabel.setColour(juce::Label::textColourId, SoundShifterTheme::textMuted);
+    undoHistoryLabel.setJustificationType(juce::Justification::centredLeft);
+
+    undoButton.onClick = [this]
+    {
+        processor.undo();
+    };
+    redoButton.onClick = [this]
+    {
+        processor.redo();
+    };
+
     presetBox.onChange = [this]
     {
         if (!refreshingPresetList)
@@ -173,6 +190,20 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
     outputAttachment = std::make_unique<SliderAttachment>(state, "output", outputSlider);
     hqAttachment = std::make_unique<ButtonAttachment>(state, "hq", hqButton);
     bypassAttachment = std::make_unique<ButtonAttachment>(state, "bypass", bypassButton);
+
+    for (auto* slider : { &pitchSlider, &fineSlider, &mixSlider, &outputSlider })
+        slider->onDragStart = [this] { processor.pushUndoState(); };
+
+    hqButton.onStateChange = [this]
+    {
+        if (hqButton.isMouseButtonDown())
+            processor.pushUndoState();
+    };
+    bypassButton.onStateChange = [this]
+    {
+        if (bypassButton.isMouseButtonDown())
+            processor.pushUndoState();
+    };
 
     startTimerHz(30);
 }
@@ -289,7 +320,10 @@ void SoundShifterProAudioProcessorEditor::resized()
     copyAToBButton.setBounds(snapshotArea.removeFromLeft(58).reduced(2));
     copyBToAButton.setBounds(snapshotArea.removeFromLeft(58).reduced(2));
     swapSnapshotsButton.setBounds(snapshotArea.removeFromLeft(68).reduced(2));
-
+    snapshotArea.removeFromLeft(8);
+    undoButton.setBounds(snapshotArea.removeFromLeft(58).reduced(2));
+    redoButton.setBounds(snapshotArea.removeFromLeft(58).reduced(2));
+    undoHistoryLabel.setBounds(snapshotArea.removeFromLeft(120).reduced(2));
 
     auto historyArea = area.removeFromTop(30);
     for (auto& button : historySnapshotButtons)
@@ -482,4 +516,10 @@ void SoundShifterProAudioProcessorEditor::timerCallback()
                               snapshotAActive ? SoundShifterTheme::panelRaised
                                               : SoundShifterTheme::accent);
     updateSnapshotHistoryButtons();
+
+    undoButton.setEnabled(processor.canUndo());
+    redoButton.setEnabled(processor.canRedo());
+    undoHistoryLabel.setText("HISTORY " + juce::String(processor.getUndoStepCount())
+                                 + " / " + juce::String(processor.getRedoStepCount()),
+                             juce::dontSendNotification);
 }

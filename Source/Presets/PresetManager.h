@@ -66,6 +66,16 @@ public:
     [[nodiscard]] juce::Time getHistorySnapshotTime(int slot) const;
     [[nodiscard]] int getActiveHistorySnapshot() const noexcept;
 
+    static constexpr int maximumUndoSteps = 100;
+    void pushUndoState();
+    bool undo();
+    bool redo();
+    void clearUndoHistory();
+    [[nodiscard]] bool canUndo() const noexcept;
+    [[nodiscard]] bool canRedo() const noexcept;
+    [[nodiscard]] int getUndoStepCount() const noexcept;
+    [[nodiscard]] int getRedoStepCount() const noexcept;
+
     [[nodiscard]] juce::String getCurrentPresetName() const;
     [[nodiscard]] juce::File getPresetDirectory() const;
 
@@ -100,6 +110,10 @@ private:
     std::array<juce::String, snapshotHistorySize> historySnapshotNames;
     std::array<juce::Time, snapshotHistorySize> historySnapshotTimes;
     int activeHistorySnapshot = -1;
+
+    std::vector<juce::ValueTree> undoStates;
+    std::vector<juce::ValueTree> redoStates;
+    bool restoringUndoState = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetManager)
 };

@@ -73,6 +73,10 @@ private:
     juce::TextButton clearHistoryButton { "CLEAR" };
     int selectedHistorySlot = 0;
 
+    juce::TextButton undoButton { "UNDO" };
+    juce::TextButton redoButton { "REDO" };
+    juce::Label undoHistoryLabel;
+
     juce::TextButton learnDownButton { "LEARN ▼" };
     juce::TextButton learnUpButton { "LEARN ▲" };
     juce::TextButton learnResetButton { "LEARN R" };

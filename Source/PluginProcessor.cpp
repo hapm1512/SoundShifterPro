@@ -751,6 +751,7 @@ bool SoundShifterProAudioProcessor::saveUserPreset(const juce::String& name)
 
 bool SoundShifterProAudioProcessor::loadPreset(const juce::String& name)
 {
+    presetManager.pushUndoState();
     return presetManager.loadPreset(name);
 }
 
@@ -811,11 +812,13 @@ void SoundShifterProAudioProcessor::captureSnapshotB()
 
 bool SoundShifterProAudioProcessor::selectSnapshotA()
 {
+    presetManager.pushUndoState();
     return presetManager.selectSnapshotA();
 }
 
 bool SoundShifterProAudioProcessor::selectSnapshotB()
 {
+    presetManager.pushUndoState();
     return presetManager.selectSnapshotB();
 }
 
@@ -831,6 +834,7 @@ void SoundShifterProAudioProcessor::copySnapshotBToA()
 
 bool SoundShifterProAudioProcessor::swapSnapshots()
 {
+    presetManager.pushUndoState();
     return presetManager.swapSnapshots();
 }
 
@@ -846,6 +850,7 @@ bool SoundShifterProAudioProcessor::captureHistorySnapshot(int slot)
 
 bool SoundShifterProAudioProcessor::recallHistorySnapshot(int slot)
 {
+    presetManager.pushUndoState();
     return presetManager.recallHistorySnapshot(slot);
 }
 
@@ -878,6 +883,47 @@ juce::String SoundShifterProAudioProcessor::getHistorySnapshotName(int slot) con
 int SoundShifterProAudioProcessor::getActiveHistorySnapshot() const noexcept
 {
     return presetManager.getActiveHistorySnapshot();
+}
+
+
+void SoundShifterProAudioProcessor::pushUndoState()
+{
+    presetManager.pushUndoState();
+}
+
+bool SoundShifterProAudioProcessor::undo()
+{
+    return presetManager.undo();
+}
+
+bool SoundShifterProAudioProcessor::redo()
+{
+    return presetManager.redo();
+}
+
+void SoundShifterProAudioProcessor::clearUndoHistory()
+{
+    presetManager.clearUndoHistory();
+}
+
+bool SoundShifterProAudioProcessor::canUndo() const noexcept
+{
+    return presetManager.canUndo();
+}
+
+bool SoundShifterProAudioProcessor::canRedo() const noexcept
+{
+    return presetManager.canRedo();
+}
+
+int SoundShifterProAudioProcessor::getUndoStepCount() const noexcept
+{
+    return presetManager.getUndoStepCount();
+}
+
+int SoundShifterProAudioProcessor::getRedoStepCount() const noexcept
+{
+    return presetManager.getRedoStepCount();
 }
 
 void SoundShifterProAudioProcessor::prepareDryDelay(

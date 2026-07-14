@@ -121,6 +121,15 @@ public:
     [[nodiscard]] juce::String getHistorySnapshotName(int slot) const;
     [[nodiscard]] int getActiveHistorySnapshot() const noexcept;
 
+    void pushUndoState();
+    bool undo();
+    bool redo();
+    void clearUndoHistory();
+    [[nodiscard]] bool canUndo() const noexcept;
+    [[nodiscard]] bool canRedo() const noexcept;
+    [[nodiscard]] int getUndoStepCount() const noexcept;
+    [[nodiscard]] int getRedoStepCount() const noexcept;
+
 private:
     void parameterChanged(const juce::String& parameterID,
                           float newValue) override;
