@@ -53,6 +53,40 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
     copyBToAButton.onClick = [this] { processor.copySnapshotBToA(); };
     swapSnapshotsButton.onClick = [this] { processor.swapSnapshots(); };
 
+
+    for (int slot = 0; slot < static_cast<int>(historySnapshotButtons.size()); ++slot)
+    {
+        auto& button = historySnapshotButtons[static_cast<size_t>(slot)];
+        addAndMakeVisible(button);
+        button.onClick = [this, slot]
+        {
+            selectedHistorySlot = slot;
+            if (processor.hasHistorySnapshot(slot))
+                processor.recallHistorySnapshot(slot);
+            updateSnapshotHistoryButtons();
+        };
+    }
+
+    addAndMakeVisible(saveHistoryButton);
+    addAndMakeVisible(deleteHistoryButton);
+    addAndMakeVisible(clearHistoryButton);
+
+    saveHistoryButton.onClick = [this]
+    {
+        processor.captureHistorySnapshot(selectedHistorySlot);
+        updateSnapshotHistoryButtons();
+    };
+    deleteHistoryButton.onClick = [this]
+    {
+        processor.deleteHistorySnapshot(selectedHistorySlot);
+        updateSnapshotHistoryButtons();
+    };
+    clearHistoryButton.onClick = [this]
+    {
+        processor.clearHistorySnapshots();
+        updateSnapshotHistoryButtons();
+    };
+
     presetBox.onChange = [this]
     {
         if (!refreshingPresetList)
@@ -256,6 +290,15 @@ void SoundShifterProAudioProcessorEditor::resized()
     copyBToAButton.setBounds(snapshotArea.removeFromLeft(58).reduced(2));
     swapSnapshotsButton.setBounds(snapshotArea.removeFromLeft(68).reduced(2));
 
+
+    auto historyArea = area.removeFromTop(30);
+    for (auto& button : historySnapshotButtons)
+        button.setBounds(historyArea.removeFromLeft(34).reduced(2));
+    historyArea.removeFromLeft(8);
+    saveHistoryButton.setBounds(historyArea.removeFromLeft(82).reduced(2));
+    deleteHistoryButton.setBounds(historyArea.removeFromLeft(76).reduced(2));
+    clearHistoryButton.setBounds(historyArea.removeFromLeft(58).reduced(2));
+
     auto footer = area.removeFromBottom(36);
     latencyLabel.setBounds(footer.removeFromLeft(210));
     versionLabel.setBounds(footer.removeFromRight(90));
@@ -378,6 +421,21 @@ void SoundShifterProAudioProcessorEditor::toggleSelectedFavourite()
         refreshPresetList();
 }
 
+void SoundShifterProAudioProcessorEditor::updateSnapshotHistoryButtons()
+{
+    const auto active = processor.getActiveHistorySnapshot();
+    for (int slot = 0; slot < static_cast<int>(historySnapshotButtons.size()); ++slot)
+    {
+        auto& button = historySnapshotButtons[static_cast<size_t>(slot)];
+        const auto occupied = processor.hasHistorySnapshot(slot);
+        button.setButtonText(occupied ? juce::String(slot + 1) + "*"
+                                      : juce::String(slot + 1));
+        button.setColour(juce::TextButton::buttonColourId,
+                         active == slot ? SoundShifterTheme::accent
+                                        : SoundShifterTheme::panelRaised);
+    }
+}
+
 void SoundShifterProAudioProcessorEditor::timerCallback()
 {
     const auto smooth = [](float target, float current)
@@ -423,4 +481,5 @@ void SoundShifterProAudioProcessorEditor::timerCallback()
     snapshotBButton.setColour(juce::TextButton::buttonColourId,
                               snapshotAActive ? SoundShifterTheme::panelRaised
                                               : SoundShifterTheme::accent);
+    updateSnapshotHistoryButtons();
 }

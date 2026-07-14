@@ -839,6 +839,47 @@ bool SoundShifterProAudioProcessor::isSnapshotAActive() const noexcept
     return presetManager.getActiveSnapshot() == PresetManager::SnapshotSlot::A;
 }
 
+bool SoundShifterProAudioProcessor::captureHistorySnapshot(int slot)
+{
+    return presetManager.captureHistorySnapshot(slot);
+}
+
+bool SoundShifterProAudioProcessor::recallHistorySnapshot(int slot)
+{
+    return presetManager.recallHistorySnapshot(slot);
+}
+
+bool SoundShifterProAudioProcessor::renameHistorySnapshot(
+    int slot, const juce::String& name)
+{
+    return presetManager.renameHistorySnapshot(slot, name);
+}
+
+bool SoundShifterProAudioProcessor::deleteHistorySnapshot(int slot)
+{
+    return presetManager.deleteHistorySnapshot(slot);
+}
+
+void SoundShifterProAudioProcessor::clearHistorySnapshots()
+{
+    presetManager.clearHistorySnapshots();
+}
+
+bool SoundShifterProAudioProcessor::hasHistorySnapshot(int slot) const noexcept
+{
+    return presetManager.hasHistorySnapshot(slot);
+}
+
+juce::String SoundShifterProAudioProcessor::getHistorySnapshotName(int slot) const
+{
+    return presetManager.getHistorySnapshotName(slot);
+}
+
+int SoundShifterProAudioProcessor::getActiveHistorySnapshot() const noexcept
+{
+    return presetManager.getActiveHistorySnapshot();
+}
+
 void SoundShifterProAudioProcessor::prepareDryDelay(
     int channels,
     int maximumBlockSize)

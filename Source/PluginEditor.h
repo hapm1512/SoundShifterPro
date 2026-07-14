@@ -26,6 +26,7 @@ private:
     void saveNextUserPreset();
     void deleteSelectedUserPreset();
     void toggleSelectedFavourite();
+    void updateSnapshotHistoryButtons();
 
     SoundShifterProAudioProcessor& processor;
     SoundShifterLookAndFeel lookAndFeel;
@@ -60,6 +61,17 @@ private:
     juce::TextButton copyAToBButton { "A>B" };
     juce::TextButton copyBToAButton { "B>A" };
     juce::TextButton swapSnapshotsButton { "SWAP" };
+
+    std::array<juce::TextButton, 8> historySnapshotButtons {
+        juce::TextButton { "1" }, juce::TextButton { "2" },
+        juce::TextButton { "3" }, juce::TextButton { "4" },
+        juce::TextButton { "5" }, juce::TextButton { "6" },
+        juce::TextButton { "7" }, juce::TextButton { "8" }
+    };
+    juce::TextButton saveHistoryButton { "SNAP SAVE" };
+    juce::TextButton deleteHistoryButton { "SNAP DEL" };
+    juce::TextButton clearHistoryButton { "CLEAR" };
+    int selectedHistorySlot = 0;
 
     juce::TextButton learnDownButton { "LEARN ▼" };
     juce::TextButton learnUpButton { "LEARN ▲" };

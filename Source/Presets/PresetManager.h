@@ -55,6 +55,17 @@ public:
     bool swapSnapshots();
     [[nodiscard]] SnapshotSlot getActiveSnapshot() const noexcept;
 
+    static constexpr int snapshotHistorySize = 8;
+    bool captureHistorySnapshot(int slot, const juce::String& name = {});
+    bool recallHistorySnapshot(int slot);
+    bool renameHistorySnapshot(int slot, const juce::String& name);
+    bool deleteHistorySnapshot(int slot);
+    void clearHistorySnapshots();
+    [[nodiscard]] bool hasHistorySnapshot(int slot) const noexcept;
+    [[nodiscard]] juce::String getHistorySnapshotName(int slot) const;
+    [[nodiscard]] juce::Time getHistorySnapshotTime(int slot) const;
+    [[nodiscard]] int getActiveHistorySnapshot() const noexcept;
+
     [[nodiscard]] juce::String getCurrentPresetName() const;
     [[nodiscard]] juce::File getPresetDirectory() const;
 
@@ -84,6 +95,11 @@ private:
     juce::ValueTree snapshotA;
     juce::ValueTree snapshotB;
     SnapshotSlot activeSnapshot { SnapshotSlot::A };
+
+    std::array<juce::ValueTree, snapshotHistorySize> historySnapshots;
+    std::array<juce::String, snapshotHistorySize> historySnapshotNames;
+    std::array<juce::Time, snapshotHistorySize> historySnapshotTimes;
+    int activeHistorySnapshot = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetManager)
 };

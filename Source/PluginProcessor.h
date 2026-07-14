@@ -112,6 +112,15 @@ public:
     bool swapSnapshots();
     [[nodiscard]] bool isSnapshotAActive() const noexcept;
 
+    bool captureHistorySnapshot(int slot);
+    bool recallHistorySnapshot(int slot);
+    bool renameHistorySnapshot(int slot, const juce::String& name);
+    bool deleteHistorySnapshot(int slot);
+    void clearHistorySnapshots();
+    [[nodiscard]] bool hasHistorySnapshot(int slot) const noexcept;
+    [[nodiscard]] juce::String getHistorySnapshotName(int slot) const;
+    [[nodiscard]] int getActiveHistorySnapshot() const noexcept;
+
 private:
     void parameterChanged(const juce::String& parameterID,
                           float newValue) override;

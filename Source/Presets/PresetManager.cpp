@@ -324,6 +324,85 @@ PresetManager::SnapshotSlot PresetManager::getActiveSnapshot() const noexcept
     return activeSnapshot;
 }
 
+bool PresetManager::captureHistorySnapshot(int slot, const juce::String& name)
+{
+    if (!juce::isPositiveAndBelow(slot, snapshotHistorySize))
+        return false;
+
+    historySnapshots[static_cast<size_t>(slot)] = apvts.copyState();
+    historySnapshotNames[static_cast<size_t>(slot)] =
+        name.isNotEmpty() ? name : "Snapshot " + juce::String(slot + 1);
+    historySnapshotTimes[static_cast<size_t>(slot)] = juce::Time::getCurrentTime();
+    activeHistorySnapshot = slot;
+    return true;
+}
+
+bool PresetManager::recallHistorySnapshot(int slot)
+{
+    if (!hasHistorySnapshot(slot))
+        return false;
+
+    if (!restoreSnapshot(historySnapshots[static_cast<size_t>(slot)]))
+        return false;
+
+    activeHistorySnapshot = slot;
+    return true;
+}
+
+bool PresetManager::renameHistorySnapshot(int slot, const juce::String& name)
+{
+    if (!hasHistorySnapshot(slot) || name.trim().isEmpty())
+        return false;
+
+    historySnapshotNames[static_cast<size_t>(slot)] = name.trim().substring(0, 48);
+    return true;
+}
+
+bool PresetManager::deleteHistorySnapshot(int slot)
+{
+    if (!juce::isPositiveAndBelow(slot, snapshotHistorySize))
+        return false;
+
+    const auto index = static_cast<size_t>(slot);
+    historySnapshots[index] = {};
+    historySnapshotNames[index].clear();
+    historySnapshotTimes[index] = {};
+    if (activeHistorySnapshot == slot)
+        activeHistorySnapshot = -1;
+    return true;
+}
+
+void PresetManager::clearHistorySnapshots()
+{
+    for (int slot = 0; slot < snapshotHistorySize; ++slot)
+        deleteHistorySnapshot(slot);
+}
+
+bool PresetManager::hasHistorySnapshot(int slot) const noexcept
+{
+    return juce::isPositiveAndBelow(slot, snapshotHistorySize)
+        && historySnapshots[static_cast<size_t>(slot)].isValid();
+}
+
+juce::String PresetManager::getHistorySnapshotName(int slot) const
+{
+    return hasHistorySnapshot(slot)
+        ? historySnapshotNames[static_cast<size_t>(slot)]
+        : juce::String("Snapshot ") + juce::String(slot + 1);
+}
+
+juce::Time PresetManager::getHistorySnapshotTime(int slot) const
+{
+    return hasHistorySnapshot(slot)
+        ? historySnapshotTimes[static_cast<size_t>(slot)]
+        : juce::Time();
+}
+
+int PresetManager::getActiveHistorySnapshot() const noexcept
+{
+    return activeHistorySnapshot;
+}
+
 juce::String PresetManager::getCurrentPresetName() const { return currentPresetName; }
 juce::File PresetManager::getPresetDirectory() const { return presetDirectory; }
 
