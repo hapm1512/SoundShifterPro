@@ -318,8 +318,9 @@ void SoundShifterProAudioProcessor::processBlock(
 
     applyOutputGain(buffer, numSamples);
 
-    if (highQuality || (numSamples >= 128))
-        updateMeters(buffer, false);
+    // Keep the output meter responsive at every host buffer size.
+    // Fast mode previously left the meter stale for blocks below 128 samples.
+    updateMeters(buffer, false);
 }
 
 void SoundShifterProAudioProcessor::applyDryWetMix(
