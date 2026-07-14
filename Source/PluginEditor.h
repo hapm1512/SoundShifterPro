@@ -25,6 +25,7 @@ private:
     void refreshPresetList();
     void saveNextUserPreset();
     void deleteSelectedUserPreset();
+    void toggleSelectedFavourite();
 
     SoundShifterProAudioProcessor& processor;
     SoundShifterLookAndFeel lookAndFeel;
@@ -52,6 +53,7 @@ private:
     juce::ComboBox presetBox;
     juce::TextButton savePresetButton { "SAVE" };
     juce::TextButton deletePresetButton { "DELETE" };
+    juce::TextButton favouritePresetButton { "STAR" };
 
     juce::TextButton learnDownButton { "LEARN ▼" };
     juce::TextButton learnUpButton { "LEARN ▲" };

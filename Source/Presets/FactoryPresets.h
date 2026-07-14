@@ -8,6 +8,8 @@ namespace SoundShifterFactoryPresets
     {
         juce::String name;
         juce::String category;
+        juce::String author;
+        juce::String description;
         float pitch = 0.0f;
         float fine = 0.0f;
         float mix = 100.0f;

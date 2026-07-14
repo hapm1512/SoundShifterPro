@@ -37,6 +37,13 @@ public:
     [[nodiscard]] juce::StringArray getFactoryPresetNames() const;
     [[nodiscard]] juce::StringArray getUserPresetNames() const;
     [[nodiscard]] juce::StringArray getAllPresetNames() const;
+    [[nodiscard]] juce::String createUniquePresetName(const juce::String& baseName) const;
+
+    void reloadPresetCache();
+    void captureSnapshotA();
+    void captureSnapshotB();
+    bool restoreSnapshotA();
+    bool restoreSnapshotB();
 
     [[nodiscard]] juce::String getCurrentPresetName() const;
     [[nodiscard]] juce::File getPresetDirectory() const;
@@ -53,10 +60,18 @@ private:
     PresetMetadata createDefaultMetadata(const juce::String& name,
                                          bool factory) const;
     void setParameter(const juce::String& parameterId, float plainValue);
+    bool restoreSnapshot(const juce::ValueTree& snapshot);
 
     juce::AudioProcessorValueTreeState& apvts;
     juce::File presetDirectory;
     juce::String currentPresetName { "Default" };
+
+    juce::StringArray cachedFactoryPresets;
+    juce::StringArray cachedUserPresets;
+    juce::HashMap<juce::String, PresetMetadata> metadataCache;
+
+    juce::ValueTree snapshotA;
+    juce::ValueTree snapshotB;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetManager)
 };

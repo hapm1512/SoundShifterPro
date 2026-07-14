@@ -40,11 +40,20 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
     addAndMakeVisible(presetBox);
     addAndMakeVisible(savePresetButton);
     addAndMakeVisible(deletePresetButton);
+    addAndMakeVisible(favouritePresetButton);
 
     presetBox.onChange = [this]
     {
         if (!refreshingPresetList)
-            processor.loadPreset(presetBox.getText());
+        {
+            auto name = presetBox.getText();
+            if (name.startsWith("* "))
+                name = name.substring(2);
+            processor.loadPreset(name);
+            favouritePresetButton.setToggleState(
+                processor.isPresetFavourite(name),
+                juce::dontSendNotification);
+        }
     };
 
     savePresetButton.onClick = [this]
@@ -55,6 +64,11 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
     deletePresetButton.onClick = [this]
     {
         deleteSelectedUserPreset();
+    };
+
+    favouritePresetButton.onClick = [this]
+    {
+        toggleSelectedFavourite();
     };
 
     refreshPresetList();
@@ -219,6 +233,7 @@ void SoundShifterProAudioProcessorEditor::resized()
     learnResetButton.setBounds(learnArea.removeFromLeft(110).reduced(2));
     learnArea.removeFromLeft(12);
     deletePresetButton.setBounds(learnArea.removeFromRight(76).reduced(2));
+    favouritePresetButton.setBounds(learnArea.removeFromRight(58).reduced(2));
     savePresetButton.setBounds(learnArea.removeFromRight(62).reduced(2));
     presetBox.setBounds(learnArea.reduced(2));
 
@@ -283,9 +298,17 @@ void SoundShifterProAudioProcessorEditor::refreshPresetList()
         presetBox.addSeparator();
 
     for (const auto& name : userPresets)
-        presetBox.addItem(name, itemId++);
+    {
+        const auto displayName = processor.isPresetFavourite(name)
+            ? juce::String("* ") + name
+            : name;
+        presetBox.addItem(displayName, itemId++);
+    }
 
     presetBox.setText(currentName, juce::dontSendNotification);
+    favouritePresetButton.setToggleState(
+        processor.isPresetFavourite(currentName),
+        juce::dontSendNotification);
 }
 
 void SoundShifterProAudioProcessorEditor::saveNextUserPreset()
@@ -306,7 +329,9 @@ void SoundShifterProAudioProcessorEditor::saveNextUserPreset()
 
 void SoundShifterProAudioProcessorEditor::deleteSelectedUserPreset()
 {
-    const auto selectedName = presetBox.getText();
+    auto selectedName = presetBox.getText();
+    if (selectedName.startsWith("* "))
+        selectedName = selectedName.substring(2);
     const auto userPresets = processor.getUserPresetNames();
 
     if (!userPresets.contains(selectedName, true))
@@ -317,6 +342,21 @@ void SoundShifterProAudioProcessorEditor::deleteSelectedUserPreset()
         processor.loadPreset("Default");
         refreshPresetList();
     }
+}
+
+void SoundShifterProAudioProcessorEditor::toggleSelectedFavourite()
+{
+    auto selectedName = presetBox.getText();
+    if (selectedName.startsWith("* "))
+        selectedName = selectedName.substring(2);
+
+    const auto userPresets = processor.getUserPresetNames();
+    if (!userPresets.contains(selectedName, true))
+        return;
+
+    const auto newState = !processor.isPresetFavourite(selectedName);
+    if (processor.setPresetFavourite(selectedName, newState))
+        refreshPresetList();
 }
 
 void SoundShifterProAudioProcessorEditor::timerCallback()

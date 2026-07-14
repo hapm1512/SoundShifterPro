@@ -766,6 +766,24 @@ bool SoundShifterProAudioProcessor::renameUserPreset(
     return presetManager.renameUserPreset(oldName, newName);
 }
 
+bool SoundShifterProAudioProcessor::setPresetFavourite(
+    const juce::String& name,
+    bool state)
+{
+    return presetManager.setFavourite(name, state);
+}
+
+bool SoundShifterProAudioProcessor::isPresetFavourite(
+    const juce::String& name) const
+{
+    return presetManager.isFavourite(name);
+}
+
+void SoundShifterProAudioProcessor::reloadPresetCache()
+{
+    presetManager.reloadPresetCache();
+}
+
 juce::StringArray SoundShifterProAudioProcessor::getFactoryPresetNames() const
 {
     return presetManager.getFactoryPresetNames();

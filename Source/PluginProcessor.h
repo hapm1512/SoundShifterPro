@@ -96,6 +96,9 @@ public:
     bool loadPreset(const juce::String& name);
     bool deleteUserPreset(const juce::String& name);
     bool renameUserPreset(const juce::String& oldName, const juce::String& newName);
+    bool setPresetFavourite(const juce::String& name, bool state);
+    [[nodiscard]] bool isPresetFavourite(const juce::String& name) const;
+    void reloadPresetCache();
     [[nodiscard]] juce::StringArray getFactoryPresetNames() const;
     [[nodiscard]] juce::StringArray getUserPresetNames() const;
     [[nodiscard]] juce::String getCurrentPresetName() const;
