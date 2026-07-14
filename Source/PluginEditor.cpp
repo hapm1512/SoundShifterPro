@@ -178,7 +178,8 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
     engineLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(engineLabel);
 
-    versionLabel.setText("v1.0 RC", juce::dontSendNotification);
+    versionLabel.setText("v" + juce::String(JucePlugin_VersionString),
+                         juce::dontSendNotification);
     versionLabel.setFont(SoundShifterTheme::labelFont(10.0f));
     versionLabel.setColour(juce::Label::textColourId, SoundShifterTheme::textMuted);
     versionLabel.setJustificationType(juce::Justification::centredRight);
