@@ -16,6 +16,8 @@ PresetManager::PresetManager(juce::AudioProcessorValueTreeState& stateToManage)
               .getChildFile("SoundShifter Pro")
               .getChildFile("Presets"))
 {
+    undoStates.reserve(maximumUndoSteps);
+    redoStates.reserve(maximumUndoSteps);
     presetDirectory.createDirectory();
     reloadPresetCache();
     captureSnapshotA();

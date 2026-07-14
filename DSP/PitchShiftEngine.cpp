@@ -51,7 +51,10 @@ void PitchShiftEngine::setPitchSemitones(float newSemitones) noexcept
     const auto clamped = juce::jlimit(-12.0f, 12.0f, newSemitones);
 
     if (pitchSemitones != clamped)
+    {
         pitchSemitones = clamped;
+        pitchRatio = std::pow(2.0f, (pitchSemitones + fineCents * 0.01f) / 12.0f);
+    }
 }
 
 void PitchShiftEngine::setFineCents(float newCents) noexcept
@@ -59,7 +62,10 @@ void PitchShiftEngine::setFineCents(float newCents) noexcept
     const auto clamped = juce::jlimit(-100.0f, 100.0f, newCents);
 
     if (fineCents != clamped)
+    {
         fineCents = clamped;
+        pitchRatio = std::pow(2.0f, (pitchSemitones + fineCents * 0.01f) / 12.0f);
+    }
 }
 
 void PitchShiftEngine::setHighQuality(bool shouldUseHighQuality) noexcept
@@ -76,10 +82,17 @@ void PitchShiftEngine::process(juce::AudioBuffer<float>& buffer) noexcept
     const auto channelsToProcess = juce::jmin(activeChannels, buffer.getNumChannels());
     const auto numberOfSamples = buffer.getNumSamples();
 
+    std::array<float*, SoundShifterDSP::Config::maxChannels> channelData {};
+    for (int channel = 0; channel < channelsToProcess; ++channel)
+        channelData[static_cast<size_t>(channel)] = buffer.getWritePointer(channel);
+
     for (int sample = 0; sample < numberOfSamples; ++sample)
     {
         for (int channel = 0; channel < channelsToProcess; ++channel)
-            inputRings[static_cast<size_t>(channel)].push(buffer.getSample(channel, sample));
+        {
+            inputRings[static_cast<size_t>(channel)].push(
+                channelData[static_cast<size_t>(channel)][sample]);
+        }
 
         if (--samplesUntilFrame <= 0)
         {
@@ -88,7 +101,10 @@ void PitchShiftEngine::process(juce::AudioBuffer<float>& buffer) noexcept
         }
 
         for (int channel = 0; channel < channelsToProcess; ++channel)
-            buffer.setSample(channel, sample, overlapAdd.popSample(channel));
+        {
+            channelData[static_cast<size_t>(channel)][sample] =
+                overlapAdd.popSample(channel);
+        }
 
         overlapAdd.advance();
     }
@@ -101,9 +117,6 @@ int PitchShiftEngine::getLatencySamples() const noexcept
 
 void PitchShiftEngine::processAvailableFrames() noexcept
 {
-    const auto totalSemitones = pitchSemitones + fineCents * 0.01f;
-    const auto pitchRatio = std::pow(2.0f, totalSemitones / 12.0f);
-
     bool allFramesReady = true;
     transientAmounts.fill(0.0f);
 

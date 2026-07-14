@@ -276,7 +276,11 @@ void SoundShifterProAudioProcessor::processBlock(
         lastAppliedHighQuality = highQuality;
     }
 
-    bypassWetSmoothed.setTargetValue(bypassed ? 0.0f : 1.0f);
+    if (lastAppliedBypass != bypassed)
+    {
+        bypassWetSmoothed.setTargetValue(bypassed ? 0.0f : 1.0f);
+        lastAppliedBypass = bypassed;
+    }
 
     const bool unityPitch =
         std::abs(pitch) < 0.001f && std::abs(fine) < 0.001f;
@@ -295,13 +299,6 @@ void SoundShifterProAudioProcessor::processBlock(
         numSamples,
         requestedMix,
         bypassed);
-
-    if (lastAppliedBypass != bypassed)
-    {
-        bypassWetSmoothed.reset(currentSampleRate.load(), 0.02);
-        bypassWetSmoothed.setTargetValue(bypassed ? 0.0f : 1.0f);
-        lastAppliedBypass = bypassed;
-    }
 
     applyOutputGain(buffer, numSamples);
 

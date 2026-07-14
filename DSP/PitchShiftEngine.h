@@ -48,6 +48,7 @@ private:
     int samplesUntilFrame = SoundShifterDSP::Config::fftSize;
     float pitchSemitones = 0.0f;
     float fineCents = 0.0f;
+    float pitchRatio = 1.0f;
     float smoothedLeftGain = 1.0f;
     float smoothedRightGain = 1.0f;
     float smoothedSideGain = 1.0f;
