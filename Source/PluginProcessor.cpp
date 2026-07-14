@@ -18,7 +18,8 @@ SoundShifterProAudioProcessor::SoundShifterProAudioProcessor()
     : AudioProcessor(BusesProperties()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      apvts(*this, nullptr, "PARAMETERS", createParameterLayout())
+      apvts(*this, nullptr, "PARAMETERS", createParameterLayout()),
+      presetManager(apvts)
 {
     cacheParameterPointers();
     registerParameterListeners();
@@ -741,6 +742,43 @@ void SoundShifterProAudioProcessor::setPitchFromMidi(float semitones)
             parameter->convertTo0to1(value));
         parameter->endChangeGesture();
     }
+}
+
+bool SoundShifterProAudioProcessor::saveUserPreset(const juce::String& name)
+{
+    return presetManager.saveUserPreset(name);
+}
+
+bool SoundShifterProAudioProcessor::loadPreset(const juce::String& name)
+{
+    return presetManager.loadPreset(name);
+}
+
+bool SoundShifterProAudioProcessor::deleteUserPreset(const juce::String& name)
+{
+    return presetManager.deleteUserPreset(name);
+}
+
+bool SoundShifterProAudioProcessor::renameUserPreset(
+    const juce::String& oldName,
+    const juce::String& newName)
+{
+    return presetManager.renameUserPreset(oldName, newName);
+}
+
+juce::StringArray SoundShifterProAudioProcessor::getFactoryPresetNames() const
+{
+    return presetManager.getFactoryPresetNames();
+}
+
+juce::StringArray SoundShifterProAudioProcessor::getUserPresetNames() const
+{
+    return presetManager.getUserPresetNames();
+}
+
+juce::String SoundShifterProAudioProcessor::getCurrentPresetName() const
+{
+    return presetManager.getCurrentPresetName();
 }
 
 void SoundShifterProAudioProcessor::prepareDryDelay(

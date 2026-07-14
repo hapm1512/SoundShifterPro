@@ -31,6 +31,11 @@ target_sources(SoundShifterPro PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.h
     Source/PluginEditor.cpp
+    Source/Presets/PresetManager.cpp
+    Source/Presets/PresetManager.h
+    Source/Presets/FactoryPresets.cpp
+    Source/Presets/FactoryPresets.h
+
     DSP/DSPConfig.h
     DSP/AudioBlock.h
     DSP/RingBuffer.h

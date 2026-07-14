@@ -22,6 +22,9 @@ private:
     void timerCallback() override;
     void configureKnob(juce::Slider&, juce::Label&, const juce::String&, const juce::String&, bool);
     void drawPanel(juce::Graphics&, juce::Rectangle<float>, float) const;
+    void refreshPresetList();
+    void saveNextUserPreset();
+    void deleteSelectedUserPreset();
 
     SoundShifterProAudioProcessor& processor;
     SoundShifterLookAndFeel lookAndFeel;
@@ -46,6 +49,10 @@ private:
     juce::TextButton hqButton { "HQ" };
     juce::TextButton bypassButton { "BYPASS" };
 
+    juce::ComboBox presetBox;
+    juce::TextButton savePresetButton { "SAVE" };
+    juce::TextButton deletePresetButton { "DELETE" };
+
     juce::TextButton learnDownButton { "LEARN ▼" };
     juce::TextButton learnUpButton { "LEARN ▲" };
     juce::TextButton learnResetButton { "LEARN R" };
@@ -59,6 +66,8 @@ private:
     std::unique_ptr<SliderAttachment> outputAttachment;
     std::unique_ptr<ButtonAttachment> hqAttachment;
     std::unique_ptr<ButtonAttachment> bypassAttachment;
+
+    bool refreshingPresetList = false;
 
     float displayedInputLeftDb = -100.0f;
     float displayedInputRightDb = -100.0f;

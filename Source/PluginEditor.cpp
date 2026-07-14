@@ -35,6 +35,30 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
     addAndMakeVisible(learnUpButton);
     addAndMakeVisible(learnResetButton);
 
+    presetBox.setTextWhenNothingSelected("Select Preset");
+    presetBox.setJustificationType(juce::Justification::centredLeft);
+    addAndMakeVisible(presetBox);
+    addAndMakeVisible(savePresetButton);
+    addAndMakeVisible(deletePresetButton);
+
+    presetBox.onChange = [this]
+    {
+        if (!refreshingPresetList)
+            processor.loadPreset(presetBox.getText());
+    };
+
+    savePresetButton.onClick = [this]
+    {
+        saveNextUserPreset();
+    };
+
+    deletePresetButton.onClick = [this]
+    {
+        deleteSelectedUserPreset();
+    };
+
+    refreshPresetList();
+
     learnDownButton.onClick = [this]
     {
         processor.beginMidiLearn(
@@ -193,6 +217,10 @@ void SoundShifterProAudioProcessorEditor::resized()
     learnDownButton.setBounds(learnArea.removeFromLeft(110).reduced(2));
     learnUpButton.setBounds(learnArea.removeFromLeft(110).reduced(2));
     learnResetButton.setBounds(learnArea.removeFromLeft(110).reduced(2));
+    learnArea.removeFromLeft(12);
+    deletePresetButton.setBounds(learnArea.removeFromRight(76).reduced(2));
+    savePresetButton.setBounds(learnArea.removeFromRight(62).reduced(2));
+    presetBox.setBounds(learnArea.reduced(2));
 
     auto footer = area.removeFromBottom(36);
     latencyLabel.setBounds(footer.removeFromLeft(210));
@@ -237,6 +265,58 @@ void SoundShifterProAudioProcessorEditor::resized()
     rightBottom.reduce(4, 8);
     outputMeterCaption.setBounds(rightBottom.removeFromTop(18));
     outputMeter.setBounds(rightBottom.reduced(0, 4));
+}
+
+void SoundShifterProAudioProcessorEditor::refreshPresetList()
+{
+    const juce::ScopedValueSetter<bool> guard(refreshingPresetList, true);
+    const auto currentName = processor.getCurrentPresetName();
+
+    presetBox.clear(juce::dontSendNotification);
+
+    int itemId = 1;
+    for (const auto& name : processor.getFactoryPresetNames())
+        presetBox.addItem(name, itemId++);
+
+    const auto userPresets = processor.getUserPresetNames();
+    if (!userPresets.isEmpty())
+        presetBox.addSeparator();
+
+    for (const auto& name : userPresets)
+        presetBox.addItem(name, itemId++);
+
+    presetBox.setText(currentName, juce::dontSendNotification);
+}
+
+void SoundShifterProAudioProcessorEditor::saveNextUserPreset()
+{
+    const auto existing = processor.getUserPresetNames();
+    int index = 1;
+    juce::String name;
+
+    do
+    {
+        name = "User Preset " + juce::String(index++).paddedLeft('0', 2);
+    }
+    while (existing.contains(name, true));
+
+    if (processor.saveUserPreset(name))
+        refreshPresetList();
+}
+
+void SoundShifterProAudioProcessorEditor::deleteSelectedUserPreset()
+{
+    const auto selectedName = presetBox.getText();
+    const auto userPresets = processor.getUserPresetNames();
+
+    if (!userPresets.contains(selectedName, true))
+        return;
+
+    if (processor.deleteUserPreset(selectedName))
+    {
+        processor.loadPreset("Default");
+        refreshPresetList();
+    }
 }
 
 void SoundShifterProAudioProcessorEditor::timerCallback()

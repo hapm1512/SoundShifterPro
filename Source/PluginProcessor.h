@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "../DSP/PitchShiftEngine.h"
+#include "Presets/PresetManager.h"
 
 class SoundShifterProAudioProcessor final
     : public juce::AudioProcessor,
@@ -91,6 +92,14 @@ public:
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
+    bool saveUserPreset(const juce::String& name);
+    bool loadPreset(const juce::String& name);
+    bool deleteUserPreset(const juce::String& name);
+    bool renameUserPreset(const juce::String& oldName, const juce::String& newName);
+    [[nodiscard]] juce::StringArray getFactoryPresetNames() const;
+    [[nodiscard]] juce::StringArray getUserPresetNames() const;
+    [[nodiscard]] juce::String getCurrentPresetName() const;
+
 private:
     void parameterChanged(const juce::String& parameterID,
                           float newValue) override;
@@ -114,6 +123,7 @@ private:
                       bool inputMeters) noexcept;
 
     juce::AudioProcessorValueTreeState apvts;
+    PresetManager presetManager;
     PitchShiftEngine pitchShiftEngine;
 
     std::atomic<float>* pitchParameter = nullptr;
