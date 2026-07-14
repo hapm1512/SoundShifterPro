@@ -174,6 +174,11 @@ private:
     juce::AudioBuffer<float> delayedDryBlock;
     int dryDelayWritePosition = 0;
 
+    float lastAppliedPitch = std::numeric_limits<float>::quiet_NaN();
+    float lastAppliedFine = std::numeric_limits<float>::quiet_NaN();
+    bool lastAppliedHighQuality = true;
+    bool lastAppliedBypass = false;
+
     std::array<bool, 128> ccPressed {};
     std::atomic<MidiLearnTarget> midiLearnTarget { MidiLearnTarget::none };
 

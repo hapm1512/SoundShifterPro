@@ -163,7 +163,13 @@ void SoundShifterProAudioProcessor::prepareToPlay(double sampleRate,
 
     currentSampleRate.store(sampleRate);
 
+    lastAppliedPitch = std::numeric_limits<float>::quiet_NaN();
+    lastAppliedFine = std::numeric_limits<float>::quiet_NaN();
+    lastAppliedHighQuality = hqParameter == nullptr || hqParameter->load() > 0.5f;
+    lastAppliedBypass = bypassParameter != nullptr && bypassParameter->load() > 0.5f;
+
     pitchShiftEngine.prepare(spec);
+    pitchShiftEngine.setHighQuality(lastAppliedHighQuality);
 
     const auto latency = pitchShiftEngine.getLatencySamples();
     setLatencySamples(latency);
@@ -252,26 +258,23 @@ void SoundShifterProAudioProcessor::processBlock(
     const bool highQuality =
         hqParameter == nullptr || hqParameter->load() > 0.5f;
 
-    static bool lastHQ = true;
-    if (lastHQ != highQuality)
-        lastHQ = highQuality;
-
-    static float lastPitch = 999.0f;
-    static float lastFine = 999.0f;
-
-    if (pitch != lastPitch)
+    if (pitch != lastAppliedPitch)
     {
         pitchShiftEngine.setPitchSemitones(pitch);
-        lastPitch = pitch;
+        lastAppliedPitch = pitch;
     }
 
-    if (fine != lastFine)
+    if (fine != lastAppliedFine)
     {
         pitchShiftEngine.setFineCents(fine);
-        lastFine = fine;
+        lastAppliedFine = fine;
     }
 
-    pitchShiftEngine.setHighQuality(highQuality);
+    if (highQuality != lastAppliedHighQuality)
+    {
+        pitchShiftEngine.setHighQuality(highQuality);
+        lastAppliedHighQuality = highQuality;
+    }
 
     bypassWetSmoothed.setTargetValue(bypassed ? 0.0f : 1.0f);
 
@@ -293,13 +296,11 @@ void SoundShifterProAudioProcessor::processBlock(
         requestedMix,
         bypassed);
 
-    static bool lastBypassState = false;
-
-    if (lastBypassState != bypassed)
+    if (lastAppliedBypass != bypassed)
     {
         bypassWetSmoothed.reset(currentSampleRate.load(), 0.02);
         bypassWetSmoothed.setTargetValue(bypassed ? 0.0f : 1.0f);
-        lastBypassState = bypassed;
+        lastAppliedBypass = bypassed;
     }
 
     applyOutputGain(buffer, numSamples);
