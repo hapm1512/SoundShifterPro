@@ -799,46 +799,6 @@ juce::String SoundShifterProAudioProcessor::getCurrentPresetName() const
     return presetManager.getCurrentPresetName();
 }
 
-void SoundShifterProAudioProcessor::captureSnapshotA()
-{
-    presetManager.captureSnapshotA();
-}
-
-void SoundShifterProAudioProcessor::captureSnapshotB()
-{
-    presetManager.captureSnapshotB();
-}
-
-bool SoundShifterProAudioProcessor::selectSnapshotA()
-{
-    return presetManager.selectSnapshotA();
-}
-
-bool SoundShifterProAudioProcessor::selectSnapshotB()
-{
-    return presetManager.selectSnapshotB();
-}
-
-void SoundShifterProAudioProcessor::copySnapshotAToB()
-{
-    presetManager.copySnapshotAToB();
-}
-
-void SoundShifterProAudioProcessor::copySnapshotBToA()
-{
-    presetManager.copySnapshotBToA();
-}
-
-bool SoundShifterProAudioProcessor::swapSnapshots()
-{
-    return presetManager.swapSnapshots();
-}
-
-bool SoundShifterProAudioProcessor::isSnapshotAActive() const noexcept
-{
-    return presetManager.getActiveSnapshot() == PresetManager::SnapshotSlot::A;
-}
-
 void SoundShifterProAudioProcessor::prepareDryDelay(
     int channels,
     int maximumBlockSize)

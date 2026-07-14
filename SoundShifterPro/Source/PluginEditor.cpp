@@ -42,17 +42,6 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
     addAndMakeVisible(deletePresetButton);
     addAndMakeVisible(favouritePresetButton);
 
-    for (auto* button : { &snapshotAButton, &snapshotBButton,
-                          &copyAToBButton, &copyBToAButton,
-                          &swapSnapshotsButton })
-        addAndMakeVisible(*button);
-
-    snapshotAButton.onClick = [this] { processor.selectSnapshotA(); };
-    snapshotBButton.onClick = [this] { processor.selectSnapshotB(); };
-    copyAToBButton.onClick = [this] { processor.copySnapshotAToB(); };
-    copyBToAButton.onClick = [this] { processor.copySnapshotBToA(); };
-    swapSnapshotsButton.onClick = [this] { processor.swapSnapshots(); };
-
     presetBox.onChange = [this]
     {
         if (!refreshingPresetList)
@@ -239,22 +228,14 @@ void SoundShifterProAudioProcessorEditor::resized()
     hqButton.setBounds(header.removeFromRight(54).reduced(2, 12));
 
     auto learnArea = area.removeFromTop(34);
-    learnDownButton.setBounds(learnArea.removeFromLeft(102).reduced(2));
-    learnUpButton.setBounds(learnArea.removeFromLeft(102).reduced(2));
-    learnResetButton.setBounds(learnArea.removeFromLeft(102).reduced(2));
-    learnArea.removeFromLeft(8);
-    deletePresetButton.setBounds(learnArea.removeFromRight(68).reduced(2));
-    favouritePresetButton.setBounds(learnArea.removeFromRight(52).reduced(2));
-    savePresetButton.setBounds(learnArea.removeFromRight(56).reduced(2));
+    learnDownButton.setBounds(learnArea.removeFromLeft(110).reduced(2));
+    learnUpButton.setBounds(learnArea.removeFromLeft(110).reduced(2));
+    learnResetButton.setBounds(learnArea.removeFromLeft(110).reduced(2));
+    learnArea.removeFromLeft(12);
+    deletePresetButton.setBounds(learnArea.removeFromRight(76).reduced(2));
+    favouritePresetButton.setBounds(learnArea.removeFromRight(58).reduced(2));
+    savePresetButton.setBounds(learnArea.removeFromRight(62).reduced(2));
     presetBox.setBounds(learnArea.reduced(2));
-
-    auto snapshotArea = area.removeFromTop(30);
-    snapshotAButton.setBounds(snapshotArea.removeFromLeft(44).reduced(2));
-    snapshotBButton.setBounds(snapshotArea.removeFromLeft(44).reduced(2));
-    snapshotArea.removeFromLeft(8);
-    copyAToBButton.setBounds(snapshotArea.removeFromLeft(58).reduced(2));
-    copyBToAButton.setBounds(snapshotArea.removeFromLeft(58).reduced(2));
-    swapSnapshotsButton.setBounds(snapshotArea.removeFromLeft(68).reduced(2));
 
     auto footer = area.removeFromBottom(36);
     latencyLabel.setBounds(footer.removeFromLeft(210));
@@ -415,12 +396,4 @@ void SoundShifterProAudioProcessorEditor::timerCallback()
         SoundShifterProAudioProcessor::MidiLearnTarget::pitchUp);
     updateButton(learnResetButton,
         SoundShifterProAudioProcessor::MidiLearnTarget::pitchReset);
-
-    const auto snapshotAActive = processor.isSnapshotAActive();
-    snapshotAButton.setColour(juce::TextButton::buttonColourId,
-                              snapshotAActive ? SoundShifterTheme::accent
-                                              : SoundShifterTheme::panelRaised);
-    snapshotBButton.setColour(juce::TextButton::buttonColourId,
-                              snapshotAActive ? SoundShifterTheme::panelRaised
-                                              : SoundShifterTheme::accent);
 }

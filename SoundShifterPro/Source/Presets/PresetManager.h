@@ -6,12 +6,6 @@
 class PresetManager final
 {
 public:
-    enum class SnapshotSlot
-    {
-        A,
-        B
-    };
-
     struct PresetMetadata
     {
         juce::String name;
@@ -48,12 +42,8 @@ public:
     void reloadPresetCache();
     void captureSnapshotA();
     void captureSnapshotB();
-    bool selectSnapshotA();
-    bool selectSnapshotB();
-    void copySnapshotAToB();
-    void copySnapshotBToA();
-    bool swapSnapshots();
-    [[nodiscard]] SnapshotSlot getActiveSnapshot() const noexcept;
+    bool restoreSnapshotA();
+    bool restoreSnapshotB();
 
     [[nodiscard]] juce::String getCurrentPresetName() const;
     [[nodiscard]] juce::File getPresetDirectory() const;
@@ -71,7 +61,6 @@ private:
                                          bool factory) const;
     void setParameter(const juce::String& parameterId, float plainValue);
     bool restoreSnapshot(const juce::ValueTree& snapshot);
-    bool selectSnapshot(SnapshotSlot target);
 
     juce::AudioProcessorValueTreeState& apvts;
     juce::File presetDirectory;
@@ -83,7 +72,6 @@ private:
 
     juce::ValueTree snapshotA;
     juce::ValueTree snapshotB;
-    SnapshotSlot activeSnapshot { SnapshotSlot::A };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetManager)
 };

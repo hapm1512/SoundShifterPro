@@ -55,12 +55,6 @@ private:
     juce::TextButton deletePresetButton { "DELETE" };
     juce::TextButton favouritePresetButton { "STAR" };
 
-    juce::TextButton snapshotAButton { "A" };
-    juce::TextButton snapshotBButton { "B" };
-    juce::TextButton copyAToBButton { "A>B" };
-    juce::TextButton copyBToAButton { "B>A" };
-    juce::TextButton swapSnapshotsButton { "SWAP" };
-
     juce::TextButton learnDownButton { "LEARN ▼" };
     juce::TextButton learnUpButton { "LEARN ▲" };
     juce::TextButton learnResetButton { "LEARN R" };

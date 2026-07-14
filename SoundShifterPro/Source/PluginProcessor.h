@@ -103,15 +103,6 @@ public:
     [[nodiscard]] juce::StringArray getUserPresetNames() const;
     [[nodiscard]] juce::String getCurrentPresetName() const;
 
-    void captureSnapshotA();
-    void captureSnapshotB();
-    bool selectSnapshotA();
-    bool selectSnapshotB();
-    void copySnapshotAToB();
-    void copySnapshotBToA();
-    bool swapSnapshots();
-    [[nodiscard]] bool isSnapshotAActive() const noexcept;
-
 private:
     void parameterChanged(const juce::String& parameterID,
                           float newValue) override;

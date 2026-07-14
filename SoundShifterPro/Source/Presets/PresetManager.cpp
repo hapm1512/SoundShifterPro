@@ -260,69 +260,10 @@ void PresetManager::reloadPresetCache()
     cachedUserPresets.sortNatural();
 }
 
-void PresetManager::captureSnapshotA()
-{
-    snapshotA = apvts.copyState();
-}
-
-void PresetManager::captureSnapshotB()
-{
-    snapshotB = apvts.copyState();
-}
-
-bool PresetManager::selectSnapshotA()
-{
-    return selectSnapshot(SnapshotSlot::A);
-}
-
-bool PresetManager::selectSnapshotB()
-{
-    return selectSnapshot(SnapshotSlot::B);
-}
-
-void PresetManager::copySnapshotAToB()
-{
-    if (activeSnapshot == SnapshotSlot::A)
-        captureSnapshotA();
-
-    snapshotB = snapshotA.createCopy();
-
-    if (activeSnapshot == SnapshotSlot::B)
-        restoreSnapshot(snapshotB);
-}
-
-void PresetManager::copySnapshotBToA()
-{
-    if (activeSnapshot == SnapshotSlot::B)
-        captureSnapshotB();
-
-    snapshotA = snapshotB.createCopy();
-
-    if (activeSnapshot == SnapshotSlot::A)
-        restoreSnapshot(snapshotA);
-}
-
-bool PresetManager::swapSnapshots()
-{
-    if (activeSnapshot == SnapshotSlot::A)
-        captureSnapshotA();
-    else
-        captureSnapshotB();
-
-    std::swap(snapshotA, snapshotB);
-    activeSnapshot = activeSnapshot == SnapshotSlot::A
-        ? SnapshotSlot::B
-        : SnapshotSlot::A;
-
-    return restoreSnapshot(activeSnapshot == SnapshotSlot::A
-                               ? snapshotA
-                               : snapshotB);
-}
-
-PresetManager::SnapshotSlot PresetManager::getActiveSnapshot() const noexcept
-{
-    return activeSnapshot;
-}
+void PresetManager::captureSnapshotA() { snapshotA = apvts.copyState(); }
+void PresetManager::captureSnapshotB() { snapshotB = apvts.copyState(); }
+bool PresetManager::restoreSnapshotA() { return restoreSnapshot(snapshotA); }
+bool PresetManager::restoreSnapshotB() { return restoreSnapshot(snapshotB); }
 
 juce::String PresetManager::getCurrentPresetName() const { return currentPresetName; }
 juce::File PresetManager::getPresetDirectory() const { return presetDirectory; }
@@ -455,24 +396,5 @@ bool PresetManager::restoreSnapshot(const juce::ValueTree& snapshot)
     if (!snapshot.isValid() || snapshot.getType() != apvts.state.getType())
         return false;
     apvts.replaceState(snapshot.createCopy());
-    return true;
-}
-
-
-bool PresetManager::selectSnapshot(SnapshotSlot target)
-{
-    if (target == activeSnapshot)
-        return true;
-
-    if (activeSnapshot == SnapshotSlot::A)
-        captureSnapshotA();
-    else
-        captureSnapshotB();
-
-    const auto& targetState = target == SnapshotSlot::A ? snapshotA : snapshotB;
-    if (!restoreSnapshot(targetState))
-        return false;
-
-    activeSnapshot = target;
     return true;
 }
