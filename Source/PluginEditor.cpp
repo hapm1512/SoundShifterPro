@@ -9,6 +9,8 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
     setResizable(true, true);
     setResizeLimits(760, 430, 1180, 680);
     setSize(920, 520);
+    setWantsKeyboardFocus(true);
+    setFocusContainerType(juce::Component::FocusContainerType::focusContainer);
 
     brandLabel.setText("HAI PHAM AUDIO", juce::dontSendNotification);
     brandLabel.setFont(SoundShifterTheme::labelFont(11.0f));
@@ -128,11 +130,13 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
         deleteSelectedUserPreset();
     };
 
+    favouritePresetButton.setClickingTogglesState(true);
     favouritePresetButton.onClick = [this]
     {
         toggleSelectedFavourite();
     };
 
+    configureTooltips();
     refreshPresetList();
 
     learnDownButton.onClick = [this]
@@ -174,7 +178,7 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
     engineLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(engineLabel);
 
-    versionLabel.setText("v0.3.4", juce::dontSendNotification);
+    versionLabel.setText("v1.0 RC", juce::dontSendNotification);
     versionLabel.setFont(SoundShifterTheme::labelFont(10.0f));
     versionLabel.setColour(juce::Label::textColourId, SoundShifterTheme::textMuted);
     versionLabel.setJustificationType(juce::Justification::centredRight);
@@ -205,13 +209,85 @@ SoundShifterProAudioProcessorEditor::SoundShifterProAudioProcessorEditor(
             processor.pushUndoState();
     };
 
-    startTimerHz(30);
+    updateSnapshotHistoryButtons();
+    updateCommercialUiState();
+    startTimerHz(24);
 }
 
 SoundShifterProAudioProcessorEditor::~SoundShifterProAudioProcessorEditor()
 {
     stopTimer();
     setLookAndFeel(nullptr);
+}
+
+
+void SoundShifterProAudioProcessorEditor::configureTooltips()
+{
+    pitchSlider.setTooltip("Shift pitch in semitones");
+    fineSlider.setTooltip("Fine pitch adjustment in cents");
+    mixSlider.setTooltip("Blend dry and processed signal");
+    outputSlider.setTooltip("Final output gain");
+    hqButton.setTooltip("Enable high-quality processing");
+    bypassButton.setTooltip("Bypass processing safely");
+
+    presetBox.setTooltip("Select a factory or user preset");
+    savePresetButton.setTooltip("Save current settings as a user preset");
+    deletePresetButton.setTooltip("Delete selected user preset");
+    favouritePresetButton.setTooltip("Mark selected user preset as favourite");
+
+    snapshotAButton.setTooltip("Recall comparison state A");
+    snapshotBButton.setTooltip("Recall comparison state B");
+    copyAToBButton.setTooltip("Copy state A to B");
+    copyBToAButton.setTooltip("Copy state B to A");
+    swapSnapshotsButton.setTooltip("Swap comparison states");
+
+    undoButton.setTooltip("Undo the last parameter change (Ctrl+Z)");
+    redoButton.setTooltip("Redo the last undone change (Ctrl+Y)");
+
+    learnDownButton.setTooltip("Learn MIDI CC for Tone Down");
+    learnUpButton.setTooltip("Learn MIDI CC for Tone Up");
+    learnResetButton.setTooltip("Learn MIDI CC for Tone Reset");
+
+    saveHistoryButton.setTooltip("Capture selected snapshot slot");
+    deleteHistoryButton.setTooltip("Delete selected snapshot slot");
+    clearHistoryButton.setTooltip("Clear all snapshot slots");
+}
+
+bool SoundShifterProAudioProcessorEditor::keyPressed(const juce::KeyPress& key)
+{
+    if (key == juce::KeyPress('z', juce::ModifierKeys::commandModifier, 0))
+        return processor.undo();
+
+    if (key == juce::KeyPress('y', juce::ModifierKeys::commandModifier, 0)
+        || key == juce::KeyPress('z', juce::ModifierKeys::commandModifier
+                                      | juce::ModifierKeys::shiftModifier, 0))
+        return processor.redo();
+
+    if (key.getKeyCode() == juce::KeyPress::escapeKey)
+    {
+        processor.cancelMidiLearn();
+        return true;
+    }
+
+    return AudioProcessorEditor::keyPressed(key);
+}
+
+void SoundShifterProAudioProcessorEditor::updateCommercialUiState()
+{
+    auto selectedName = presetBox.getText();
+    if (selectedName.startsWith("* "))
+        selectedName = selectedName.substring(2);
+
+    const auto isUserPreset = processor.getUserPresetNames().contains(selectedName, true);
+    deletePresetButton.setEnabled(isUserPreset);
+    favouritePresetButton.setEnabled(isUserPreset);
+    favouritePresetButton.setButtonText(processor.isPresetFavourite(selectedName)
+                                             ? "STAR ON"
+                                             : "STAR");
+
+    undoButton.setEnabled(processor.canUndo());
+    redoButton.setEnabled(processor.canRedo());
+    deleteHistoryButton.setEnabled(processor.hasHistorySnapshot(selectedHistorySlot));
 }
 
 void SoundShifterProAudioProcessorEditor::configureKnob(juce::Slider& slider,
@@ -405,6 +481,7 @@ void SoundShifterProAudioProcessorEditor::refreshPresetList()
     favouritePresetButton.setToggleState(
         processor.isPresetFavourite(currentName),
         juce::dontSendNotification);
+    updateCommercialUiState();
 }
 
 void SoundShifterProAudioProcessorEditor::saveNextUserPreset()
@@ -516,6 +593,9 @@ void SoundShifterProAudioProcessorEditor::timerCallback()
                               snapshotAActive ? SoundShifterTheme::panelRaised
                                               : SoundShifterTheme::accent);
     updateSnapshotHistoryButtons();
+
+    if ((++uiTick % 6) == 0)
+        updateCommercialUiState();
 
     undoButton.setEnabled(processor.canUndo());
     redoButton.setEnabled(processor.canRedo());

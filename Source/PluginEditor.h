@@ -14,6 +14,7 @@ public:
 
     void paint(juce::Graphics&) override;
     void resized() override;
+    bool keyPressed(const juce::KeyPress&) override;
 
 private:
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
@@ -27,6 +28,8 @@ private:
     void deleteSelectedUserPreset();
     void toggleSelectedFavourite();
     void updateSnapshotHistoryButtons();
+    void configureTooltips();
+    void updateCommercialUiState();
 
     SoundShifterProAudioProcessor& processor;
     SoundShifterLookAndFeel lookAndFeel;
@@ -76,6 +79,7 @@ private:
     juce::TextButton undoButton { "UNDO" };
     juce::TextButton redoButton { "REDO" };
     juce::Label undoHistoryLabel;
+    juce::TooltipWindow tooltipWindow { this, 450 };
 
     juce::TextButton learnDownButton { "LEARN ▼" };
     juce::TextButton learnUpButton { "LEARN ▲" };
@@ -92,6 +96,7 @@ private:
     std::unique_ptr<ButtonAttachment> bypassAttachment;
 
     bool refreshingPresetList = false;
+    int uiTick = 0;
 
     float displayedInputLeftDb = -100.0f;
     float displayedInputRightDb = -100.0f;

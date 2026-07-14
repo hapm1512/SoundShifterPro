@@ -16,6 +16,13 @@ public:
         setColour(juce::TextButton::buttonOnColourId, SoundShifterTheme::accent);
         setColour(juce::TextButton::textColourOffId, SoundShifterTheme::textMuted);
         setColour(juce::TextButton::textColourOnId, SoundShifterTheme::background);
+        setColour(juce::ComboBox::backgroundColourId, SoundShifterTheme::panelRaised);
+        setColour(juce::ComboBox::outlineColourId, SoundShifterTheme::outline);
+        setColour(juce::ComboBox::textColourId, SoundShifterTheme::text);
+        setColour(juce::ComboBox::arrowColourId, SoundShifterTheme::accent);
+        setColour(juce::PopupMenu::backgroundColourId, SoundShifterTheme::panel);
+        setColour(juce::PopupMenu::textColourId, SoundShifterTheme::text);
+        setColour(juce::PopupMenu::highlightedBackgroundColourId, SoundShifterTheme::accentDim);
     }
 
     void drawRotarySlider(juce::Graphics& g,
@@ -90,6 +97,9 @@ public:
         auto colour = button.getToggleState() ? SoundShifterTheme::accent
                                               : SoundShifterTheme::panelRaised;
 
+        if (!button.isEnabled())
+            colour = colour.withMultipliedAlpha(0.45f);
+
         if (highlighted)
             colour = colour.brighter(0.08f);
         if (down)
@@ -108,9 +118,46 @@ public:
                         bool) override
     {
         g.setFont(SoundShifterTheme::labelFont(11.0f));
-        g.setColour(button.getToggleState() ? SoundShifterTheme::background
-                                            : SoundShifterTheme::textMuted);
+        g.setColour(!button.isEnabled() ? SoundShifterTheme::textMuted.withAlpha(0.45f)
+                    : button.getToggleState() ? SoundShifterTheme::background
+                                              : SoundShifterTheme::textMuted);
         g.drawText(button.getButtonText(), button.getLocalBounds(), juce::Justification::centred);
+    }
+
+
+    void drawComboBox(juce::Graphics& g,
+                      int width, int height,
+                      bool isButtonDown,
+                      int buttonX, int buttonY,
+                      int buttonW, int buttonH,
+                      juce::ComboBox& box) override
+    {
+        juce::ignoreUnused(buttonX, buttonY, buttonW, buttonH);
+        auto bounds = juce::Rectangle<float>(0.5f, 0.5f,
+                                             static_cast<float>(width) - 1.0f,
+                                             static_cast<float>(height) - 1.0f);
+        auto background = SoundShifterTheme::panelRaised;
+        if (box.hasKeyboardFocus(true))
+            background = background.brighter(0.06f);
+        if (isButtonDown)
+            background = background.darker(0.08f);
+
+        g.setColour(background);
+        g.fillRoundedRectangle(bounds, 6.0f);
+        g.setColour(box.hasKeyboardFocus(true) ? SoundShifterTheme::accent
+                                               : SoundShifterTheme::outline);
+        g.drawRoundedRectangle(bounds, 6.0f, 1.0f);
+
+        juce::Path arrow;
+        const auto cx = static_cast<float>(width - 16);
+        const auto cy = static_cast<float>(height) * 0.5f;
+        arrow.startNewSubPath(cx - 4.0f, cy - 2.0f);
+        arrow.lineTo(cx, cy + 2.0f);
+        arrow.lineTo(cx + 4.0f, cy - 2.0f);
+        g.setColour(SoundShifterTheme::accent);
+        g.strokePath(arrow, juce::PathStrokeType(1.6f,
+                                                 juce::PathStrokeType::curved,
+                                                 juce::PathStrokeType::rounded));
     }
 
     juce::Font getLabelFont(juce::Label& label) override

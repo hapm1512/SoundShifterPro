@@ -6,11 +6,20 @@
 class StereoMeter final : public juce::Component
 {
 public:
+    StereoMeter()
+    {
+        setOpaque(false);
+        setInterceptsMouseClicks(false, false);
+    }
+
     void setLevels(float leftDb, float rightDb)
     {
+        const auto changed = std::abs(left - leftDb) > 0.12f
+                          || std::abs(right - rightDb) > 0.12f;
         left = leftDb;
         right = rightDb;
-        repaint();
+        if (changed)
+            repaint();
     }
 
     void paint(juce::Graphics& g) override
@@ -27,7 +36,10 @@ private:
         return juce::jlimit(0.0f, 1.0f, juce::jmap(db, -60.0f, 3.0f, 0.0f, 1.0f));
     }
 
-    void drawChannel(juce::Graphics& g, juce::Rectangle<float> area, float db, const juce::String& name)
+    void drawChannel(juce::Graphics& g,
+                     juce::Rectangle<float> area,
+                     float db,
+                     const juce::String& name)
     {
         auto label = area.removeFromLeft(14.0f);
         g.setColour(SoundShifterTheme::textMuted);
@@ -40,11 +52,18 @@ private:
 
         auto fill = track;
         fill.setWidth(track.getWidth() * normalise(db));
-        juce::ColourGradient gradient(SoundShifterTheme::accent, track.getX(), 0.0f,
-                                      SoundShifterTheme::warning, track.getRight(), 0.0f, false);
+        juce::ColourGradient gradient(SoundShifterTheme::accent,
+                                      track.getX(), 0.0f,
+                                      SoundShifterTheme::warning,
+                                      track.getRight(), 0.0f,
+                                      false);
         gradient.addColour(0.88, SoundShifterTheme::danger);
         g.setGradientFill(gradient);
         g.fillRoundedRectangle(fill, 2.5f);
+
+        const auto zeroDbX = track.getX() + track.getWidth() * normalise(0.0f);
+        g.setColour(SoundShifterTheme::text.withAlpha(0.28f));
+        g.drawVerticalLine(static_cast<int>(zeroDbX), track.getY(), track.getBottom());
 
         g.setColour(SoundShifterTheme::outline.withAlpha(0.7f));
         g.drawRoundedRectangle(track, 2.5f, 0.8f);
