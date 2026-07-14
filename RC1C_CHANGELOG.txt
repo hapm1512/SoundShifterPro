@@ -1,0 +1,10 @@
+SoundShifter Pro - RC1C Host Compatibility
+
+- Validates host state data before APVTS restore.
+- Serializes state under the audio callback lock.
+- Forces DSP parameter resynchronization after project recall.
+- Clears stale Undo/Redo history after host state restore.
+- Increments parameter revision after host recall.
+- Adds safe fallback for unexpected oversized host blocks.
+- Resets meters and dry-delay position during releaseResources().
+- Keeps DSP algorithm and intended sound unchanged.

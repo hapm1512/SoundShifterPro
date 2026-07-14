@@ -151,6 +151,8 @@ private:
     void applyOutputGain(juce::AudioBuffer<float>& buffer, int numSamples);
     void updateMeters(const juce::AudioBuffer<float>& buffer,
                       bool inputMeters) noexcept;
+    void synchroniseRuntimeStateAfterRestore() noexcept;
+    void resetRuntimeMeters() noexcept;
 
     juce::AudioProcessorValueTreeState apvts;
     PresetManager presetManager;

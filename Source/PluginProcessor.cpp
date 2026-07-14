@@ -205,6 +205,8 @@ void SoundShifterProAudioProcessor::releaseResources()
     pitchShiftEngine.reset();
     dryDelayBuffer.clear();
     delayedDryBlock.clear();
+    dryDelayWritePosition = 0;
+    resetRuntimeMeters();
 }
 
 bool SoundShifterProAudioProcessor::isBusesLayoutSupported(
@@ -229,6 +231,20 @@ void SoundShifterProAudioProcessor::processBlock(
     handleMidiControl(midiMessages);
 
     const auto numSamples = buffer.getNumSamples();
+    if (numSamples <= 0)
+        return;
+
+    // Some hosts can briefly deliver a block larger than the maximum size
+    // announced in prepareToPlay(). Never allow the dry-delay workspace to
+    // overrun; use a safe dry fallback for that exceptional block.
+    if (numSamples > delayedDryBlock.getNumSamples()
+        || dryDelayBuffer.getNumSamples() <= 0)
+    {
+        updateMeters(buffer, true);
+        applyOutputGain(buffer, numSamples);
+        updateMeters(buffer, false);
+        return;
+    }
 
     for (auto channel = getTotalNumInputChannels();
          channel < getTotalNumOutputChannels();
@@ -999,20 +1015,69 @@ void SoundShifterProAudioProcessor::createDelayedDry(
 void SoundShifterProAudioProcessor::getStateInformation(
     juce::MemoryBlock& destData)
 {
-    if (auto xml = apvts.copyState().createXml())
-        copyXmlToBinary(*xml, destData);
+    const juce::ScopedLock callbackGuard(getCallbackLock());
+
+    const auto state = apvts.copyState();
+    if (state.isValid())
+        if (auto xml = state.createXml())
+            copyXmlToBinary(*xml, destData);
 }
 
 void SoundShifterProAudioProcessor::setStateInformation(
     const void* data,
     int sizeInBytes)
 {
-    if (auto xml = getXmlFromBinary(data, sizeInBytes))
+    if (data == nullptr || sizeInBytes <= 0)
+        return;
+
+    auto xml = getXmlFromBinary(data, sizeInBytes);
+    if (xml == nullptr || !xml->hasTagName(apvts.state.getType()))
+        return;
+
+    auto restoredState = juce::ValueTree::fromXml(*xml);
+    if (!restoredState.isValid()
+        || restoredState.getType() != apvts.state.getType())
+        return;
+
     {
-        if (xml->hasTagName(apvts.state.getType()))
-            apvts.replaceState(
-                juce::ValueTree::fromXml(*xml));
+        const juce::ScopedLock callbackGuard(getCallbackLock());
+        apvts.replaceState(restoredState);
+        synchroniseRuntimeStateAfterRestore();
     }
+
+    presetManager.clearUndoHistory();
+    parameterChangeRevision.fetch_add(1, std::memory_order_release);
+}
+
+void SoundShifterProAudioProcessor::synchroniseRuntimeStateAfterRestore() noexcept
+{
+    // Force the DSP engine to consume all restored host parameters on the
+    // next audio block. Smoothed controls retain click-free transitions.
+    lastAppliedPitch = std::numeric_limits<float>::quiet_NaN();
+    lastAppliedFine = std::numeric_limits<float>::quiet_NaN();
+
+    const auto restoredHQ = hqParameter == nullptr || hqParameter->load() > 0.5f;
+    lastAppliedHighQuality = !restoredHQ;
+
+    const auto restoredBypass = bypassParameter != nullptr
+        && bypassParameter->load() > 0.5f;
+    lastAppliedBypass = !restoredBypass;
+
+    if (mixParameter != nullptr)
+        mixSmoothed.setTargetValue(
+            juce::jlimit(0.0f, 1.0f, mixParameter->load() * 0.01f));
+
+    if (outputParameter != nullptr)
+        outputGainLinear.setTargetValue(
+            juce::Decibels::decibelsToGain(outputParameter->load()));
+}
+
+void SoundShifterProAudioProcessor::resetRuntimeMeters() noexcept
+{
+    inputLeftDb.store(-100.0f, std::memory_order_relaxed);
+    inputRightDb.store(-100.0f, std::memory_order_relaxed);
+    outputLeftDb.store(-100.0f, std::memory_order_relaxed);
+    outputRightDb.store(-100.0f, std::memory_order_relaxed);
 }
 
 juce::AudioProcessorEditor*
