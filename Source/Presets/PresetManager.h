@@ -6,13 +6,31 @@
 class PresetManager final
 {
 public:
+    struct PresetMetadata
+    {
+        juce::String name;
+        juce::String author { "Hai Pham" };
+        juce::String category { "User" };
+        juce::String description;
+        juce::Time created;
+        juce::Time modified;
+        bool favourite = false;
+    };
+
     explicit PresetManager(juce::AudioProcessorValueTreeState& stateToManage);
 
     bool saveUserPreset(const juce::String& name);
+    bool saveUserPresetAs(const juce::String& oldName,
+                          const juce::String& newName);
     bool loadPreset(const juce::String& name);
     bool deleteUserPreset(const juce::String& name);
     bool renameUserPreset(const juce::String& oldName,
                           const juce::String& newName);
+
+    bool setFavourite(const juce::String& name, bool state);
+    [[nodiscard]] bool isFavourite(const juce::String& name) const;
+    [[nodiscard]] PresetMetadata getMetadata(const juce::String& name) const;
+    [[nodiscard]] juce::StringArray getFavouritePresets() const;
 
     [[nodiscard]] bool presetExists(const juce::String& name) const;
     [[nodiscard]] bool isFactoryPreset(const juce::String& name) const noexcept;
@@ -26,8 +44,14 @@ public:
 private:
     static juce::String sanitisePresetName(const juce::String& name);
     juce::File getPresetFile(const juce::String& name) const;
+
     bool loadFactoryPreset(const SoundShifterFactoryPresets::Preset& preset);
     bool loadUserPreset(const juce::File& file);
+    bool updateMetadataInFile(const juce::File& file,
+                              const PresetMetadata& metadata) const;
+    PresetMetadata readMetadataFromFile(const juce::File& file) const;
+    PresetMetadata createDefaultMetadata(const juce::String& name,
+                                         bool factory) const;
     void setParameter(const juce::String& parameterId, float plainValue);
 
     juce::AudioProcessorValueTreeState& apvts;
